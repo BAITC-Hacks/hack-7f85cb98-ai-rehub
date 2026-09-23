@@ -1,0 +1,14 @@
+{
+  "name": "@hackalem/akim-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic Akim for 5 Hours scoring engine",
+  "exports": {".": {"types": "./index.d.mts", "default": "./index.mjs"}},
+  "types": "./index.d.mts",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node cli.mjs --demo"
+  }
+}

@@ -1,2 +1,96 @@
-# hack-7f85cb98-ai-rehub
-Hackathon team repository for AI-Rehub
+# Аким на 5 часов — AI-симулятор управления городом
+
+Хакатонный прототип: команда выбирает городские меры, расчётный движок считает бюджет, показатели и итоговый Astana Quality of Life Score. AI-слой объясняет уже рассчитанный сценарий и проверенную замену одного решения.
+
+## Запуск
+
+```bash
+npm ci
+cp .env.example .env.local
+npm run dev
+```
+
+В `.env.local` можно указать `OPENAI_API_KEY` и `OPENAI_MODEL`. Ключ хранится только на сервере. Без ключа `/api/analyze` работает через локальный fallback. Ключ ChatGPT Pro не заменяет ключ OpenAI API: это отдельный сервис с собственной оплатой. Главная страница в этой ветке пока остаётся шаблоном Next.js; работающий сценарий проверяется через API и тесты ниже.
+
+На Windows вместо `cp` используйте `Copy-Item .env.example .env.local`.
+
+## Контракт интеграции
+
+Серверный запрос передаёт только пять решений. Маршрут сам вызывает `simulateScenario()` из `engine/index.mjs`, проверяет бюджет и правила, затем передаёт рассчитанный результат AI. Готовые Score и стоимость от клиента API не принимает. AI не считает Score и не выбирает меры самостоятельно.
+
+```ts
+const response = await fetch("/api/analyze", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ decisions: [
+    { measureId: "M7", districtId: "nura" },
+    { measureId: "M8", districtId: "nura" },
+    { measureId: "M10", districtId: "nura" },
+    { measureId: "M12" },
+    { measureId: "M5", districtId: "saryarka" },
+  ] }),
+});
+const analysis: ScenarioAnalysis = await response.json();
+```
+
+Для сравнения можно добавить `replacementDecisions` — полный второй набор из пяти решений, отличающийся ровно одним выбором и улучшающий Score. Сервер пересчитывает оба набора и сам определяет прирост. Успешный ответ имеет поля `source`, `summary`, `strengths`, `risks`, `tradeoffs`, `recommendations`. `source` показывает `openai` или `fallback`. Неверный JSON, невалидный набор, несовместимость мер и ошибочная замена возвращают HTTP 400; при ошибке выбора ответ содержит `validation.errors` и бюджет.
+
+Для подключения командного интерфейса используйте `useScenarioAnalysis` из `src/lib/ai/useScenarioAnalysis.ts` внутри клиентского компонента:
+
+```tsx
+const { analysis, loading, error, retry } = useScenarioAnalysis(scenario, candidate);
+// Отобразите analysis.summary, strengths, risks, tradeoffs и recommendations.
+```
+
+Передавайте в хук рассчитанный `scenario`, а после поиска замены — также `candidate`. Хук извлекает идентификаторы решений из результата и отправляет их на серверный пересчёт. Он отменяет устаревшие запросы при смене сценария. `error` содержит короткое пользовательское сообщение, а `retry()` повторяет запрос. Даже при сетевой ошибке `analysis` содержит локальный fallback; при обычном серверном fallback ошибки нет. Пока результат не рассчитан, передайте `null` вместо `scenario`.
+
+Для проверки API без интерфейса после `npm run dev` выполните в PowerShell:
+
+```powershell
+$decisions = @(
+  @{ measureId = 'M7'; districtId = 'nura' },
+  @{ measureId = 'M8'; districtId = 'nura' },
+  @{ measureId = 'M10'; districtId = 'nura' },
+  @{ measureId = 'M12' },
+  @{ measureId = 'M5'; districtId = 'saryarka' }
+)
+$body = @{ decisions = $decisions } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri 'http://localhost:3000/api/analyze' -Method Post -ContentType 'application/json' -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
+
+Маршрут: `src/app/api/analyze/route.ts`. Серверный OpenAI-анализ: `src/lib/ai/analyze.ts`. Детерминированное объяснение: `src/lib/ai/fallbackAnalysis.ts`. Тестовые сценарии в `src/lib/ai/__fixtures__/scenarioFixtures.ts` строятся вызовами реального движка, без вручную записанного Score.
+
+Расчётный движок формирует показатели, а сервер собирает из них проверенные выводы. OpenAI Responses API получает эти выводы и возвращает только их идентификаторы в порядке важности. Сервер переставляет готовые фразы; модель не пишет текст с новыми числами или названиями мер. Неверные идентификаторы, ошибка или таймаут API возвращают тот же проверенный анализ с `source: "fallback"`. Все числовые показатели интерфейс показывает из результата расчётного движка. Обучение модели на районном датасете не требуется.
+
+## Проверка
+
+```bash
+npm test
+node --test engine/test/*.test.mjs
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+Тесты покрывают официальный сценарий из датасета (95 единиц, Score 56.54307), второй допустимый сценарий (61 единица), превышение бюджета, контрфактическую замену, неверные ответы модели и крайние значения районных показателей. Обычный `npm test` не делает платных запросов. Для отдельной проверки реального OpenAI API с изменёнными районными данными выполните в PowerShell:
+
+```powershell
+$env:RUN_LIVE_AI='1'
+node --env-file=.env.local node_modules/vitest/vitest.mjs run src/lib/ai/liveEvaluation.test.ts
+```
+
+### Сценарии оценки качества
+
+| Сценарий | Ожидаемый результат | Что должно быть в анализе |
+| --- | --- | --- |
+| Официальные пять мер | стоимость 95, Score 56.54307, критических показателей 0 | Рост Score, устранение критических показателей, Нура как слабейший район |
+| Экономный набор | стоимость 61, Score 55.343025, критический показатель 1 | Оставшаяся проблема поликлиник в Нуре и снижение показателя дорог |
+| Две синергии | стоимость 95, Score 55.531895, критический показатель 1 | Обе синергии M1 + M2 и M5 + M6, оставшаяся проблема в Нуре |
+| Проверенная замена | стоимость 100, Score 57.20556 | Замена M5 на M3 и рассчитанный прирост около 0,66 |
+| Изменённый районный датасет | Score 48.91492 → 50.90031, критических показателей 4 | Сохраняющиеся проблемы Нуры, Есиля и Сарыарки; данные игры не меняются |
+
+Эти случаи выполняет `src/lib/ai/qualityScenarios.test.ts` на результатах движка. Отдельно тесты проверяют неверный JSON модели, ошибку OpenAI, сломанный ответ сервера и переход на fallback.
+
+## Границы ответственности
+
+Расчётный движок находится в `engine/`, AI/API-интеграция — в `src/lib/ai/` и `src/app/api/analyze/`. При запросе `{ decisions, replacementDecisions? }` сервер пересчитывает оба сценария из районного датасета. Клиентский хук использует тот же контракт; готовые числовые результаты не принимаются сервером как основание для AI-анализа.
