@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AI-симулятор управления Астаной: соберите сценарий из пяти городских решений и оцените влияние на районы."
+    />
+    <title>Аким на 5 часов — городской симулятор</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="На главную">
+          <span class="brand-mark" aria-hidden="true">A5</span>
+          <span>
+            <strong>Аким на 5 часов</strong>
+            <small>AI-симулятор управления городом</small>
+          </span>
+        </a>
+        <div class="header-status" aria-label="Текущий статус плана">
+          <span>Решения <strong id="header-decisions">0/5</strong></span>
+          <i aria-hidden="true"></i>
+          <span>Бюджет <strong id="header-budget">0/100</strong></span>
+        </div>
+        <div class="topbar-actions">
+          <button class="button button-ghost" id="load-example" type="button">Загрузить пример</button>
+          <button class="button button-ghost" id="reset-plan" type="button">Сбросить</button>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow">Сценарий развития Астаны · 8 кварталов</p>
+            <h1 id="hero-title">Пять решений.<br /><span>Один городской баланс.</span></h1>
+            <p class="hero-lead">
+              Распределите 100 единиц бюджета между районами. Модель учтёт лаги,
+              синергии, конфликты и влияние на самый уязвимый район.
+            </p>
+          </div>
+          <div class="hero-score" aria-label="Базовый показатель качества жизни">
+            <span>Базовый Score</span>
+            <strong id="baseline-score">52,56</strong>
+            <small>до управленческих решений</small>
+          </div>
+        </section>
+
+        <section class="status-grid" aria-label="Статус сценария">
+          <article class="status-card">
+            <span class="status-icon status-icon-budget" aria-hidden="true">₸</span>
+            <div><small>Остаток бюджета</small><strong><span id="budget-left">100</span> / 100</strong></div>
+          </article>
+          <article class="status-card">
+            <span class="status-icon status-icon-decisions" aria-hidden="true">✓</span>
+            <div><small>Выбрано решений</small><strong><span id="decision-count">0</span> / 5</strong></div>
+          </article>
+          <article class="status-card">
+            <span class="status-icon status-icon-directions" aria-hidden="true">◆</span>
+            <div><small>Направлений</small><strong><span id="direction-count">0</span> / минимум 3</strong></div>
+          </article>
+          <article class="status-card status-card-wide">
+            <span class="status-dot" id="validation-dot" aria-hidden="true"></span>
+            <div><small>Готовность сценария</small><strong id="validation-summary">Выберите пять решений</strong></div>
+          </article>
+        </section>
+
+        <section class="baseline-section" aria-labelledby="baseline-title">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">Исходные данные</p>
+              <h2 id="baseline-title">Пять районов до решений</h2>
+            </div>
+            <p>Раскройте район, чтобы увидеть все десять показателей. Значения ниже 40 отмечены как критические.</p>
+          </div>
+          <div class="baseline-districts" id="baseline-districts"></div>
+        </section>
+
+        <section class="builder-section" aria-labelledby="builder-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Шаг 1</p>
+              <h2 id="builder-title">Соберите план действий</h2>
+            </div>
+            <p>Не более двух решений из одного направления.</p>
+          </div>
+
+          <div class="builder-layout">
+            <div class="catalog-panel">
+              <div class="catalog-toolbar">
+                <div class="filter-tabs" id="filter-tabs" role="tablist" aria-label="Фильтр направлений"></div>
+                <label class="search-field">
+                  <span class="sr-only">Поиск мероприятий</span>
+                  <input id="measure-search" type="search" placeholder="Найти меру" />
+                </label>
+              </div>
+              <div class="measure-grid" id="measure-grid" aria-live="polite"></div>
+            </div>
+
+            <aside class="plan-panel" aria-labelledby="plan-title">
+              <div class="plan-panel-header">
+                <div>
+                  <p class="eyebrow">Ваш сценарий</p>
+                  <h3 id="plan-title">План на 2 года</h3>
+                </div>
+                <span class="budget-pill"><span id="budget-spent">0</span> ед.</span>
+              </div>
+              <div class="budget-track" aria-label="Использовано бюджета">
+                <span id="budget-fill"></span>
+              </div>
+              <ol class="selected-list" id="selected-list"></ol>
+              <div class="validation-box" id="validation-box" role="status"></div>
+              <button class="button button-primary button-full" id="run-simulation" type="button" disabled>
+                Рассчитать сценарий
+              </button>
+              <p class="plan-hint">Score рассчитывается кодом. AI только объясняет результат.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section class="results-section" id="results" aria-labelledby="results-title" hidden>
+          <div class="section-heading results-heading">
+            <div>
+              <p class="eyebrow">Шаг 2</p>
+              <h2 id="results-title">Результат сценария</h2>
+            </div>
+            <div class="result-actions">
+              <button class="button button-secondary" id="save-scenario" type="button">Сохранить сценарий</button>
+              <button class="button button-advisor" id="find-replacement" type="button">Найти лучшую замену</button>
+            </div>
+          </div>
+
+          <div class="result-overview">
+            <article class="score-card">
+              <div class="score-ring" id="score-ring">
+                <div><strong id="result-score">—</strong><span>из 100</span></div>
+              </div>
+              <div class="score-copy">
+                <span class="result-kicker">Astana Quality of Life Score</span>
+                <h3 id="score-verdict">Сценарий рассчитан</h3>
+                <p id="score-summary"></p>
+                <div class="score-meta">
+                  <span class="delta-badge" id="score-delta">—</span>
+                  <span id="critical-count">—</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="analysis-card">
+              <div class="analysis-header">
+                <div class="ai-orb" aria-hidden="true">AI</div>
+                <div><span>Анализ сценария</span><small id="analysis-mode">подготовка данных</small></div>
+              </div>
+              <div id="ai-analysis" class="analysis-content" aria-live="polite"></div>
+            </article>
+          </div>
+
+          <div class="result-grid">
+            <article class="result-panel districts-panel">
+              <div class="panel-heading">
+                <div><span class="panel-number">01</span><h3>Районы: до и после</h3></div>
+                <div class="legend"><span class="legend-before">До</span><span class="legend-after">После</span></div>
+              </div>
+              <div class="district-chart" id="district-chart"></div>
+            </article>
+
+            <article class="result-panel metrics-panel">
+              <div class="panel-heading">
+                <div><span class="panel-number">02</span><h3>Изменения показателей</h3></div>
+                <label class="select-field">Район
+                  <select id="metric-district"></select>
+                </label>
+              </div>
+              <div class="metric-grid" id="metric-grid"></div>
+            </article>
+          </div>
+
+          <section class="advisor-section" id="advisor" aria-labelledby="advisor-title" hidden>
+            <div class="section-heading advisor-heading">
+              <div><p class="eyebrow">Counterfactual Policy Advisor</p><h2 id="advisor-title">Одна замена — более сильный план</h2></div>
+              <p>Перебираются только допустимые замены. Все числа рассчитаны кодом.</p>
+            </div>
+            <div class="advisor-loading" id="advisor-loading" hidden>
+              <i aria-hidden="true"></i><div><strong>Ищем лучшую допустимую замену</strong><span>Текущий результат остаётся на экране.</span></div>
+            </div>
+            <div id="advisor-comparison" hidden>
+              <div class="advisor-grid">
+                <article class="advisor-plan advisor-current">
+                  <span class="advisor-card-label">Ваш план</span>
+                  <strong id="advisor-current-score">—</strong>
+                  <small>Score</small>
+                  <dl><div><dt>Бюджет</dt><dd id="advisor-current-budget">—</dd></div><div><dt>Слабый район</dt><dd id="advisor-current-weakest">—</dd></div></dl>
+                  <p id="advisor-current-measures"></p>
+                </article>
+                <div class="advisor-swap">
+                  <span>Лучшая замена</span>
+                  <div><del id="advisor-remove">—</del><b aria-hidden="true">→</b><ins id="advisor-add">—</ins></div>
+                  <small id="advisor-slot">Меняется одно решение</small>
+                </div>
+                <article class="advisor-plan advisor-candidate">
+                  <span class="advisor-card-label">Новый план</span>
+                  <strong id="advisor-candidate-score">—</strong>
+                  <small>Score</small>
+                  <span class="advisor-gain" id="advisor-gain">—</span>
+                  <dl><div><dt>Бюджет</dt><dd id="advisor-candidate-budget">—</dd></div><div><dt>Критических</dt><dd id="advisor-candidate-critical">—</dd></div></dl>
+                  <p id="advisor-candidate-measures"></p>
+                </article>
+              </div>
+              <div class="advisor-facts">
+                <article><span>Выигрыш</span><strong id="advisor-win">—</strong></article>
+                <article><span>Риск</span><strong id="advisor-risk">—</strong></article>
+                <article><span>Компромисс</span><strong id="advisor-tradeoff">—</strong></article>
+              </div>
+              <button class="button button-primary advisor-apply" id="apply-replacement" type="button">Применить замену</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="comparison-section" id="comparison" aria-labelledby="comparison-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">Сравнение</p><h2 id="comparison-title">Сохранённые сценарии</h2></div>
+            <p>До трёх вариантов для быстрого выбора лучшего баланса.</p>
+          </div>
+          <div class="comparison-table-wrap">
+            <table class="comparison-table">
+              <thead><tr><th>Сценарий</th><th>Score</th><th>Δ к базе</th><th>Бюджет</th><th>Слабый район</th><th></th></tr></thead>
+              <tbody id="comparison-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>HackAlem AI · «Аким на 5 часов»</span>
+        <span>Все числовые результаты воспроизводимы и рассчитываются локально.</span>
+      </footer>
+    </div>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
