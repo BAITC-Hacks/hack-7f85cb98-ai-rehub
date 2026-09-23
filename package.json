@@ -17,7 +17,8 @@
     "smoke:browser:prepare": "node scripts/write-browser-smoke.mjs",
     "test:app": "vitest run",
     "typecheck": "next typegen && tsc --noEmit && npm run typecheck:engine",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:engine && npm run smoke:engine"
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:engine && npm run smoke:engine",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.3.6",
@@ -27,6 +28,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.4",
     "@types/react": "^19",

@@ -5,7 +5,7 @@ import { replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtu
 import { toAnalysisScenario } from "@/lib/ai/engineScenario";
 import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
 import { analysisResponseSchema } from "@/lib/ai/schemas";
-import { EXAMPLE_DECISIONS, simulateScenario } from "../../../engine/index.mjs";
+import { EXAMPLE_DECISIONS, evaluateScenario } from "@/domain";
 
 const cheapDecisions = [
   { measureId: "M9", districtId: "nura" },
@@ -33,7 +33,7 @@ describe("analysis quality on real engine scenarios", () => {
     { name: "two synergies", decisions: synergyDecisions, cost: 95, score: 55.531895, critical: 1 },
     { name: "one-decision replacement", decisions: replacementDecisions, cost: 100, score: 57.20556, critical: 0 },
   ])("$name", ({ decisions, cost, score, critical }) => {
-    const simulation = simulateScenario(decisions);
+    const simulation = evaluateScenario(decisions);
     expect(simulation.valid).toBe(true);
     if (!simulation.valid) return;
 
@@ -56,7 +56,7 @@ describe("analysis quality on real engine scenarios", () => {
   });
 
   it("reports the traffic decline in the cheap scenario", () => {
-    const simulation = simulateScenario(cheapDecisions);
+    const simulation = evaluateScenario(cheapDecisions);
     expect(simulation.valid).toBe(true);
     if (!simulation.valid) return;
     const analysis = createFallbackAnalysis(toAnalysisScenario(simulation));
@@ -64,7 +64,7 @@ describe("analysis quality on real engine scenarios", () => {
   });
 
   it("recommends only the measured replacement", () => {
-    const current = simulateScenario(EXAMPLE_DECISIONS);
+    const current = evaluateScenario(EXAMPLE_DECISIONS);
     expect(current.valid).toBe(true);
     if (!current.valid) return;
     const analysis = createFallbackAnalysis(toAnalysisScenario(current), replacementCandidateFixture);

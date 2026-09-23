@@ -1,32 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdvisorComparison from "../components/AdvisorComparison";
 import AIAnalysis from "../components/AIAnalysis";
 import BudgetBar from "../components/BudgetBar";
 import DecisionSlot from "../components/DecisionSlot";
 import DistrictComparison from "../components/DistrictComparison";
 import ScenarioSummary from "../components/ScenarioSummary";
-import { DISTRICTS, EXAMPLE_PLAN, MEASURES } from "../data.js";
-import { calculateScenario, districtScore, validatePlan } from "../engine.js";
-import { findBestReplacementMock } from "../advisor.mock.js";
+import { DISTRICTS, EXAMPLE_DECISIONS, MEASURES, evaluateScenario, findBestReplacement, getBaseline, validateScenario } from "@/domain";
+import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
+import { useScenarioAnalysis } from "@/lib/ai/useScenarioAnalysis";
 import { languageLabels, localAnalysis, localizedValidation, t, type Language } from "../i18n";
+import type { AdvisorResult, Decision, ValidScenarioResult } from "@/types/simulation";
 
-type Decision = { measureId: string; districtId: string | null };
 type Theme = "light" | "dark";
+const emptyPlan = (): Decision[] => Array.from({ length: 5 }, () => ({ measureId: "" }));
+const examplePlan = (): Decision[] => EXAMPLE_DECISIONS.map((decision) => ({ ...decision }));
+const baseline = getBaseline();
+const evaluatedExample = evaluateScenario(EXAMPLE_DECISIONS);
+const exampleResult = evaluatedExample.valid ? evaluatedExample : null;
+const exampleAdvisor = findBestReplacement(EXAMPLE_DECISIONS);
 
-const emptyPlan = (): Decision[] => Array.from({ length: 5 }, () => ({ measureId: "", districtId: null }));
-const examplePlan = (): Decision[] => EXAMPLE_PLAN.map((decision: Decision) => ({ ...decision }));
-const exampleResult = calculateScenario(EXAMPLE_PLAN);
-const exampleAdvisor = findBestReplacementMock(EXAMPLE_PLAN);
+function restoreDecisions(value: unknown): Decision[] | null {
+  if (!Array.isArray(value) || value.length !== 5) return null;
+  const restored: Decision[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || typeof item.measureId !== "string") return null;
+    if (item.districtId != null && typeof item.districtId !== "string") return null;
+    restored.push(item.districtId == null ? { measureId: item.measureId } : { measureId: item.measureId, districtId: item.districtId });
+  }
+  return restored;
+}
 
 export default function SimulatorPage() {
   const [decisions, setDecisions] = useState<Decision[]>(examplePlan);
-  const [result, setResult] = useState<any>(exampleResult);
-  const [advisor, setAdvisor] = useState<any>(exampleAdvisor);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisError, setAnalysisError] = useState(false);
+  const [result, setResult] = useState<ValidScenarioResult | null>(exampleResult);
+  const [advisor, setAdvisor] = useState<AdvisorResult | null>(exampleAdvisor);
   const [advisorLoading, setAdvisorLoading] = useState(false);
   const [advisorSearched, setAdvisorSearched] = useState(true);
   const [language, setLanguage] = useState<Language>("ru");
@@ -35,36 +44,35 @@ export default function SimulatorPage() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const scenarioRevision = useRef(0);
-  const analysisController = useRef<AbortController | null>(null);
-
-  useEffect(() => () => analysisController.current?.abort(), []);
 
   useEffect(() => {
-    try {
-      const storedLanguage = localStorage.getItem("akim-language");
-      const storedTheme = localStorage.getItem("akim-theme");
-      const storedPlan = localStorage.getItem("akim-saved-plan");
-      if (storedLanguage === "ru" || storedLanguage === "kk" || storedLanguage === "en") setLanguage(storedLanguage);
-      if (storedTheme === "light" || storedTheme === "dark") setTheme(storedTheme);
-      if (storedPlan) {
-        const saved = JSON.parse(storedPlan);
-        if (Array.isArray(saved.decisions) && saved.decisions.length === 5) {
-          const restored = saved.decisions.map((item: Decision) => ({ measureId: item.measureId || "", districtId: item.districtId || null }));
-          setDecisions(restored);
-          if (validatePlan(restored).valid) {
-            setResult(calculateScenario(restored));
-            setAdvisor(null);
-            setAdvisorSearched(false);
-          } else {
-            setResult(null);
-            setAdvisor(null);
-            setAdvisorSearched(false);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const storedLanguage = localStorage.getItem("akim-language");
+        const storedTheme = localStorage.getItem("akim-theme");
+        const storedPlan = localStorage.getItem("akim-saved-plan");
+        if (storedLanguage === "ru" || storedLanguage === "kk" || storedLanguage === "en") setLanguage(storedLanguage);
+        if (storedTheme === "light" || storedTheme === "dark") setTheme(storedTheme);
+        if (storedPlan) {
+          const saved: unknown = JSON.parse(storedPlan);
+          if (saved && typeof saved === "object" && "decisions" in saved) {
+            const restored = restoreDecisions(saved.decisions);
+            if (restored) {
+              const evaluated = evaluateScenario(restored.filter((item) => item.measureId));
+              setDecisions(restored);
+              setResult(evaluated.valid ? evaluated : null);
+              setAdvisor(null);
+              setAdvisorSearched(false);
+              if ("savedAt" in saved && typeof saved.savedAt === "string") setSavedAt(saved.savedAt);
+            }
           }
-          if (typeof saved.savedAt === "string") setSavedAt(saved.savedAt);
         }
-      }
-    } catch { /* Invalid local data never blocks the simulator. */ }
-    setPreferencesLoaded(true);
+      } catch { /* Invalid local data never blocks the simulator. */ }
+      setPreferencesLoaded(true);
+    });
+    return () => { cancelled = true; scenarioRevision.current += 1; };
   }, []);
 
   useEffect(() => {
@@ -81,21 +89,20 @@ export default function SimulatorPage() {
   }, [theme, preferencesLoaded]);
 
   const activeDecisions = decisions.filter((decision) => decision.measureId);
-  const validation = validatePlan(activeDecisions);
-  const spent = activeDecisions.reduce((total, decision) => total + (MEASURES.find((item) => item.id === decision.measureId)?.cost || 0), 0);
-  const directionCount = new Set(activeDecisions.map((decision) => MEASURES.find((item) => item.id === decision.measureId)?.direction).filter(Boolean)).size;
-  const baselineDistricts = useMemo(() => DISTRICTS.map((district) => ({ ...district, score: districtScore(district.indicators) })), []);
-  const districtsToShow = result?.districts || baselineDistricts;
-  const visibleAnalysis = result ? language === "ru" && analysis ? analysis : localAnalysis(language, result) : null;
-  const analysisMode = language === "ru" && analysis?.mode ? analysis.mode : t(language, "localAnalysis");
-  const visibleAnalysisLoading = language === "ru" && analysisLoading;
+  const validation = validateScenario(activeDecisions);
+  const spent = validation.totalCost ?? activeDecisions.reduce((total, decision) => total + (MEASURES.find((item) => item.id === decision.measureId)?.cost ?? 0), 0);
+  const directionCount = new Set(activeDecisions.map((decision) => MEASURES.find((item) => item.id === decision.measureId)?.category).filter(Boolean)).size;
+  const bestCandidate = advisor?.bestByScore;
+  const ai = useScenarioAnalysis(preferencesLoaded && language === "ru" ? result : null, bestCandidate);
+  const districtsToShow = result?.districts ?? baseline.districts;
+  const visibleAnalysis = result
+    ? language === "ru" ? ai.analysis ?? createFallbackAnalysis(result, bestCandidate) : localAnalysis(language, result, bestCandidate)
+    : null;
+  const analysisMode = visibleAnalysis?.source === "openai" ? "OpenAI" : t(language, "localAnalysis");
+  const visibleAnalysisLoading = language === "ru" && ai.loading;
 
   function invalidateRequests() {
     scenarioRevision.current += 1;
-    analysisController.current?.abort();
-    analysisController.current = null;
-    setAnalysisLoading(false);
-    setAnalysisError(false);
     setAdvisorLoading(false);
     setSaveError(false);
   }
@@ -110,7 +117,6 @@ export default function SimulatorPage() {
     setResult(null);
     setAdvisor(null);
     setAdvisorSearched(false);
-    setAnalysis(null);
     setSavedAt(null);
   }
 
@@ -120,7 +126,6 @@ export default function SimulatorPage() {
     setResult(exampleResult);
     setAdvisor(exampleAdvisor);
     setAdvisorSearched(true);
-    setAnalysis(null);
     setSavedAt(null);
     clearSavedPlan();
   }
@@ -131,7 +136,6 @@ export default function SimulatorPage() {
     setResult(null);
     setAdvisor(null);
     setAdvisorSearched(false);
-    setAnalysis(null);
     setSavedAt(null);
     clearSavedPlan();
   }
@@ -145,64 +149,40 @@ export default function SimulatorPage() {
     } catch { setSaveError(true); }
   }
 
-  async function requestAnalysis(nextResult: any) {
-    analysisController.current?.abort();
-    const endpoint = (window as any).AKIM_AI_ENDPOINT;
-    if (!endpoint || language !== "ru") {
-      setAnalysis(null);
-      setAnalysisLoading(false);
-      setAnalysisError(false);
-      return;
-    }
-    setAnalysisLoading(true);
-    setAnalysisError(false);
-    setAnalysis(null);
-    const controller = new AbortController();
-    analysisController.current = controller;
-    try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...nextResult, language }), signal: controller.signal });
-      if (!response.ok) throw new Error("analysis unavailable");
-      const nextAnalysis = await response.json();
-      if (!controller.signal.aborted) setAnalysis(nextAnalysis);
-    } catch {
-      if (!controller.signal.aborted) setAnalysisError(true);
-    } finally {
-      if (!controller.signal.aborted) setAnalysisLoading(false);
-    }
-  }
-
   function calculate() {
     if (!validation.valid) return;
     invalidateRequests();
-    const next = calculateScenario(activeDecisions);
-    setResult(next);
+    const next = evaluateScenario(validation.decisions);
+    setResult(next.valid ? next : null);
     setAdvisor(null);
     setAdvisorSearched(false);
-    requestAnalysis(next);
     requestAnimationFrame(() => document.getElementById("results")?.scrollIntoView({ block: "start" }));
   }
 
   async function findReplacement() {
     if (!result) return;
     const revision = scenarioRevision.current;
+    const currentDecisions = result.decisions;
     setAdvisorLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 200));
     if (revision !== scenarioRevision.current) return;
-    setAdvisor(findBestReplacementMock(activeDecisions));
+    setAdvisor(findBestReplacement(currentDecisions));
     setAdvisorSearched(true);
     setAdvisorLoading(false);
   }
 
   function applyReplacement() {
-    if (!advisor) return;
+    if (!bestCandidate) return;
     invalidateRequests();
-    setDecisions(advisor.decisions.map((decision: Decision) => ({ ...decision })));
-    setResult(advisor.candidate);
+    const removed = bestCandidate.removed.decision;
+    setDecisions((current) => current.map((decision) =>
+      decision.measureId === removed.measureId && decision.districtId === removed.districtId
+        ? { ...bestCandidate.added.decision } : decision));
+    setResult(null);
     setAdvisor(null);
     setAdvisorSearched(false);
     setSavedAt(null);
-    requestAnalysis(advisor.candidate);
-    requestAnimationFrame(() => document.getElementById("results")?.scrollIntoView({ block: "start" }));
+    requestAnimationFrame(() => document.getElementById("plan")?.scrollIntoView({ block: "start" }));
   }
 
   return (
@@ -221,16 +201,16 @@ export default function SimulatorPage() {
           <BudgetBar spent={spent} decisionCount={activeDecisions.length} directionCount={directionCount} language={language} />
           <div className="panel-divider" />
           <div className="plan-decision-list">{decisions.map((decision, index) => <DecisionSlot key={index} index={index} decision={decision} measures={MEASURES} districts={DISTRICTS} disabledMeasureIds={activeDecisions.map((item) => item.measureId)} language={language} onChange={updateDecision} />)}</div>
-          <div className={`validation-note ${validation.valid ? "is-valid" : "is-invalid"}`} role="status"><span aria-hidden="true">{validation.valid ? "✓" : "!"}</span><p>{validation.valid ? t(language, "valid") : localizedValidation(language, validation.errors, activeDecisions, spent)}</p></div>
+          <div className={`validation-note ${validation.valid ? "is-valid" : "is-invalid"}`} role="status"><span aria-hidden="true">{validation.valid ? "✓" : "!"}</span><p>{validation.valid ? t(language, "valid") : localizedValidation(language, validation)}</p></div>
           <button className="button button-primary calculate-button" disabled={!validation.valid} onClick={calculate}>{t(language, "calculate")}</button>
           <details className="rules-note"><summary>{t(language, "rulesLabel")}</summary><p>{t(language, "rules")}</p></details>
           <div className="plan-actions"><button type="button" onClick={loadExample}>{t(language, "loadExample")}</button><button type="button" onClick={reset}>{t(language, "reset")}</button></div>
         </aside>
 
         <div className="results-area">
-          <ScenarioSummary result={result} baselineScore={exampleResult.baselineScore} spent={spent} language={language} analysisLoading={visibleAnalysisLoading} analysisMode={analysisMode} />
-          <DistrictComparison districts={districtsToShow} baseline={!result} language={language} weakestId={result?.weakestDistrict.id} />
-          <div className="insight-grid"><AdvisorComparison current={result} advisor={advisor} loading={advisorLoading} searched={advisorSearched} language={language} onFind={findReplacement} onApply={applyReplacement} /><AIAnalysis analysis={visibleAnalysis} loading={visibleAnalysisLoading} mode={analysisMode} error={analysisError && language === "ru"} language={language} onRetry={() => result && requestAnalysis(result)} /></div>
+          <ScenarioSummary result={result} baselineScore={baseline.score} spent={spent} language={language} analysisLoading={visibleAnalysisLoading} analysisMode={analysisMode} />
+          <DistrictComparison districts={districtsToShow} baseline={!result} language={language} weakestId={result?.weakestDistrictIds[0] ?? baseline.weakestDistrictIds[0]} />
+          <div className="insight-grid"><AdvisorComparison current={result} advisor={bestCandidate ?? null} loading={advisorLoading} searched={advisorSearched} language={language} onFind={findReplacement} onApply={applyReplacement} /><AIAnalysis analysis={visibleAnalysis} loading={visibleAnalysisLoading} mode={analysisMode} error={language === "ru" ? ai.error : null} language={language} onRetry={ai.retry} /></div>
         </div>
       </main>
       <footer className="simulator-footer">{t(language, "footer")}</footer>

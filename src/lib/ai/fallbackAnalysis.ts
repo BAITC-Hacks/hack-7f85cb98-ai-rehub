@@ -1,3 +1,4 @@
+import { findBestReplacement, RULES } from "@/domain";
 import type {
   DistrictResult,
   IndicatorCode,
@@ -51,7 +52,7 @@ function getMostImprovedDistrict(
 function getCriticalIndicators(scenario: ScenarioResult): { text: string; value: number }[] {
   return scenario.districts.flatMap((district) =>
     (Object.entries(district.indicatorsAfter) as [IndicatorCode, number][])
-      .filter(([, value]) => value < 40)
+      .filter(([, value]) => value < RULES.criticalThreshold)
       .map(([indicator, value]) => ({
         text: `${district.name}: ${INDICATOR_LABELS[indicator]} (${formatNumber(value)})`,
         value,
@@ -73,7 +74,7 @@ export function createFallbackAnalysis(
       source: "fallback",
       summary: "Сценарий нельзя оценить, пока не исправлены ошибки выбора.",
       strengths: [],
-      risks: scenario.errors,
+      risks: scenario.errors.slice(0, 5),
       tradeoffs: [],
       recommendations: ["Исправьте указанные нарушения и повторите расчёт."],
     };
@@ -147,7 +148,7 @@ export function createFallbackAnalysis(
     tradeoffs.push("План использует весь доступный бюджет и не оставляет резерва.");
   } else {
     tradeoffs.push(
-      `После выбранных мер остаётся ${scenario.remainingBudget} из 100 единиц бюджета.`,
+      `После выбранных мер остаётся ${scenario.remainingBudget} из ${RULES.budget} единиц бюджета.`,
     );
   }
 
@@ -177,21 +178,43 @@ export function createFallbackAnalysis(
   if (candidate) {
     const removed = describeChange(candidate.removed);
     const added = describeChange(candidate.added);
-    summary += ` Замена ${removed} на ${added} повышает результат до ${formatNumber(candidate.result.finalScore)}.`;
-    recommendations.push(
-      `Рассмотрите замену ${removed} на ${added}: прирост Score составит ${formatNumber(candidate.scoreGain)}.`,
-    );
+    const direction = candidate.scoreGain > 0 ? "повышает" : candidate.scoreGain < 0 ? "снижает" : "не меняет";
+    summary += candidate.scoreGain === 0
+      ? ` Замена ${removed} на ${added} не меняет результат: ${formatNumber(candidate.result.finalScore)}.`
+      : ` Замена ${removed} на ${added} ${direction} результат до ${formatNumber(candidate.result.finalScore)}.`;
+    recommendations.push(candidate.scoreGain === 0
+      ? `Замена ${removed} на ${added} оставляет Score без изменений.`
+      : `Замена ${removed} на ${added}: ${candidate.scoreGain > 0 ? "прирост" : "снижение"} Score на ${formatNumber(Math.abs(candidate.scoreGain))}.`);
+
+    if (candidate.scoreGain <= 0) {
+      const advisor = findBestReplacement(scenario.decisions);
+      // Evaluation fixtures may use a different district snapshot. A search on
+      // the production catalog cannot prove anything about that other dataset.
+      const sameSnapshot = advisor.current.valid && advisor.current.districts.every((district) => {
+        const supplied = scenario.districts.find(({ districtId }) => districtId === district.districtId);
+        return supplied && (Object.keys(district.indicatorsBefore) as IndicatorCode[]).every((id) =>
+          supplied.indicatorsBefore[id] === district.indicatorsBefore[id] &&
+          supplied.indicatorsAfter[id] === district.indicatorsAfter[id]);
+      });
+      if (sameSnapshot && (!advisor.bestByScore || advisor.bestByScore.scoreGain <= 0)) {
+        recommendations.push("Улучшение одной заменой не найдено. Это не доказывает глобальную оптимальность плана.");
+      }
+    }
 
     if (candidate.weakestDistrictGain > 0) {
       recommendations.push(
-        `При замене Score самого слабого района увеличится на ${formatNumber(candidate.weakestDistrictGain)}.`,
+        `При замене минимальный районный Score увеличится на ${formatNumber(candidate.weakestDistrictGain)}.`,
       );
+    } else if (candidate.weakestDistrictGain < 0) {
+      recommendations.push(`При замене минимальный районный Score снизится на ${formatNumber(Math.abs(candidate.weakestDistrictGain))}.`);
     }
 
     if (candidate.removedCriticalCount > 0) {
       recommendations.push(
         `Замена дополнительно устраняет ${candidate.removedCriticalCount} критических показателя.`,
       );
+    } else if (candidate.removedCriticalCount < 0) {
+      recommendations.push(`Замена увеличивает число критических показателей на ${Math.abs(candidate.removedCriticalCount)}.`);
     }
   } else {
     recommendations.push(

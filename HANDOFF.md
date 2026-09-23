@@ -1,5 +1,7 @@
 # Frontend / UX handoff
 
+> Исторический handoff ветки `frontend` (75b17e0). В объединённой версии временный JS-движок и mock удалены; интерфейс подключён к `src/domain/index.ts` и `useScenarioAnalysis`. Актуальные контракты и запуск — в [README](README.md), итог проверки — в [отчёте интеграции](docs/integration-report.md). Исходное описание ниже сохранено для истории вклада.
+
 ## Временная зависимость
 
 `src/advisor.mock.js` — единственный временный адаптер. Он перебирает допустимые замены одной меры через существующие `validatePlan()` и `calculateScenario()`. При интеграции замените импорт `findBestReplacementMock` в `src/app.js` на общий `findBestReplacement`, сохранив контракт ниже.

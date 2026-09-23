@@ -7,7 +7,7 @@ import {
 import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
 import { toAnalysisScenario } from "@/lib/ai/engineScenario";
 import { analysisResponseSchema } from "@/lib/ai/schemas";
-import { simulateScenario } from "../../../engine/index.mjs";
+import { evaluateScenario, findBestReplacement, SECOND_EXAMPLE_DECISIONS } from "@/domain";
 
 describe("createFallbackAnalysis", () => {
   it("explains a valid scenario using only calculated facts", () => {
@@ -49,8 +49,19 @@ describe("createFallbackAnalysis", () => {
     ).toBe(before);
   });
 
+  it("describes the best negative replacement without promising improvement", () => {
+    const advisor = findBestReplacement(SECOND_EXAMPLE_DECISIONS);
+    if (!advisor.current.valid || !advisor.bestByScore) throw new Error("Expected valid advisor");
+    const analysis = createFallbackAnalysis(advisor.current, advisor.bestByScore);
+    expect(analysis.summary).toContain("снижает результат");
+    expect(analysis.recommendations.join(" ")).toContain("снижение Score на 0,01");
+    expect(analysis.recommendations.join(" ")).toContain("Улучшение одной заменой не найдено");
+    expect(analysis.recommendations.join(" ")).toContain("не доказывает глобальную оптимальность");
+    expect(analysisResponseSchema.safeParse(analysis).success).toBe(true);
+  });
+
   it("reports an indicator decline even when the total Score improves", () => {
-    const simulation = simulateScenario([
+    const simulation = evaluateScenario([
       { measureId: "M9", districtId: "nura" },
       { measureId: "M11", districtId: "nura" },
       { measureId: "M10", districtId: "nura" },

@@ -1,12 +1,12 @@
 import { toAnalysisScenario, toReplacementCandidate } from "@/lib/ai/engineScenario";
-import { EXAMPLE_DECISIONS, simulateScenario } from "../../../../engine/index.mjs";
+import { EXAMPLE_DECISIONS, evaluateScenario } from "@/domain";
 
-const current = simulateScenario(EXAMPLE_DECISIONS);
+const current = evaluateScenario(EXAMPLE_DECISIONS);
 const replacementDecisions = [
   ...EXAMPLE_DECISIONS.filter(({ measureId }) => measureId !== "M5"),
   { measureId: "M3", districtId: "nura" } as const,
 ];
-const replacement = simulateScenario(replacementDecisions);
+const replacement = evaluateScenario(replacementDecisions);
 
 if (!current.valid || !replacement.valid) {
   throw new Error("Тестовые сценарии должны проходить проверку движка");

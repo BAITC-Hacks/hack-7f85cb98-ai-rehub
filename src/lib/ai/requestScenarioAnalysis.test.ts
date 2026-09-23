@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { currentScenarioFixture, replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
 import { requestScenarioAnalysis } from "@/lib/ai/requestScenarioAnalysis";
+import { evaluateScenario, SECOND_EXAMPLE_DECISIONS, findBestReplacement } from "@/domain";
 
 const validAnalysis = {
   source: "openai",
@@ -84,6 +85,46 @@ describe("requestScenarioAnalysis", () => {
     const controller = new AbortController();
     controller.abort();
     const fetcher = vi.fn().mockRejectedValue(new DOMException("Aborted", "AbortError"));
+    await expect(requestScenarioAnalysis(currentScenarioFixture, undefined, {
+      fetcher, signal: controller.signal,
+    })).rejects.toThrow();
+  });
+
+  it("reports choice errors without sending an AI request", async () => {
+    const fetcher = vi.fn();
+    const invalid = evaluateScenario([]);
+    const outcome = await requestScenarioAnalysis(invalid, undefined, { fetcher });
+    expect(outcome.errorKind).toBe("validation");
+    expect(outcome.error).toBe(invalid.errors.join(" "));
+    expect(outcome.analysis.summary).toContain("нельзя оценить");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("accepts a negative candidate and recalculates untrusted candidate gains", async () => {
+    const advisor = findBestReplacement(SECOND_EXAMPLE_DECISIONS);
+    if (!advisor.bestByScore) throw new Error("Expected candidate");
+    const fetcher = vi.fn().mockRejectedValue(new Error("offline"));
+    const outcome = await requestScenarioAnalysis(advisor.current,
+      { ...advisor.bestByScore, scoreGain: 999 }, { fetcher });
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(outcome.errorKind).toBe("unavailable");
+    expect(outcome.analysis.summary).toContain("снижает результат");
+    expect(outcome.analysis.recommendations.join(" ")).not.toContain("999");
+  });
+
+  it("distinguishes a server validation rejection from provider unavailability", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "План отклонён" }), { status: 400 }));
+    const outcome = await requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher });
+    expect(outcome.errorKind).toBe("validation");
+    expect(outcome.error).toBe("План отклонён");
+  });
+
+  it("discards a late successful response after cancellation", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      return new Response(JSON.stringify(validAnalysis));
+    });
     await expect(requestScenarioAnalysis(currentScenarioFixture, undefined, {
       fetcher, signal: controller.signal,
     })).rejects.toThrow();

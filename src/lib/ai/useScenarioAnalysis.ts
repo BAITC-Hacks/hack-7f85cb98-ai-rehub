@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { requestScenarioAnalysis } from "@/lib/ai/requestScenarioAnalysis";
+import type { AnalysisOutcome } from "@/lib/ai/requestScenarioAnalysis";
 import type { ReplacementCandidate, ScenarioAnalysis, ScenarioResult } from "@/types/simulation";
 
 type AnalysisState = {
@@ -10,6 +11,7 @@ type AnalysisState = {
   analysis: ScenarioAnalysis | null;
   loading: boolean;
   error: string | null;
+  errorKind: AnalysisOutcome["errorKind"];
 };
 
 export function useScenarioAnalysis(
@@ -22,6 +24,7 @@ export function useScenarioAnalysis(
     analysis: null,
     loading: false,
     error: null,
+    errorKind: null,
   });
   const requestKey = scenario ? JSON.stringify({ scenario, candidate, retryIndex }) : null;
 
@@ -34,8 +37,8 @@ export function useScenarioAnalysis(
     };
 
     requestScenarioAnalysis(currentScenario, currentCandidate, { signal: controller.signal })
-      .then(({ analysis, error }) => {
-        if (!controller.signal.aborted) setState({ key: requestKey, analysis, error, loading: false });
+      .then(({ analysis, error, errorKind }) => {
+        if (!controller.signal.aborted) setState({ key: requestKey, analysis, error, errorKind, loading: false });
       })
       .catch(() => {
         // Aborted requests belong to an older scenario.
@@ -47,12 +50,13 @@ export function useScenarioAnalysis(
   // A changed scenario must never display the previous scenario's explanation.
   const visibleState = state.key === requestKey
     ? state
-    : { analysis: null, loading: Boolean(scenario), error: null };
+    : { analysis: null, loading: Boolean(scenario), error: null, errorKind: null };
 
   return {
     analysis: visibleState.analysis,
     loading: visibleState.loading,
     error: visibleState.error,
+    errorKind: visibleState.errorKind,
     retry: () => setRetryIndex((value) => value + 1),
   };
 }

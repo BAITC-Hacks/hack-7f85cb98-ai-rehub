@@ -120,7 +120,6 @@ test('IDs, references, weights, shares, costs, lags, and numeric values are vali
 
   const categoryIds = new Set(CATEGORIES.map(({ id }) => id));
   const indicatorIdSet = new Set<string>(indicatorIds);
-  const districtIds = new Set(DISTRICTS.map(({ id }) => id));
   const measureIds = new Set(MEASURES.map(({ id }) => id));
   assert.ok(INDICATORS.every(({ category }) => categoryIds.has(category)));
   for (const district of DISTRICTS) assert.deepEqual(Object.keys(district.indicators).sort(), [...indicatorIds].sort());
