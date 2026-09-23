@@ -161,11 +161,11 @@ export function validateScenario(input: unknown): ValidationResult {
     const first = occurrences.get(conflict.measureIds[0]);
     const second = occurrences.get(conflict.measureIds[1]);
     if (!first || !second) continue;
-    // A duplicated local selection has no unambiguous district for a conflict.
+    // Any selected pair in the same known district is a definite conflict,
+    // including when one of the measures was selected more than once.
     const incompatible = conflict.scope === 'global'
-      || (first.length === 1 && second.length === 1
-        && first[0].districtId !== undefined
-        && first[0].districtId === second[0].districtId);
+      || first.some(firstEntry => firstEntry.districtId !== undefined
+        && second.some(secondEntry => secondEntry.districtId === firstEntry.districtId));
     if (incompatible) {
       add({
         code: 'INCOMPATIBLE_MEASURES',

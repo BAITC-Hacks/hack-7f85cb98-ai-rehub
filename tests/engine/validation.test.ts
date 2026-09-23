@@ -143,6 +143,33 @@ test('both local conflict pairs are allowed across districts', () => {
   }
 });
 
+test('a duplicated measure in the same district still reports the local conflict', () => {
+  const result = validateScenario([
+    d('M4', 'nura'), d('M4', 'nura'), d('M7', 'nura'),
+    d('M10', 'nura'), d('M12'),
+  ]);
+  assert.deepEqual(result.errorDetails.map(error => error.code),
+    ['DUPLICATE_MEASURE', 'INCOMPATIBLE_MEASURES']);
+});
+
+test('a duplicate in two districts conflicts when one known district matches', () => {
+  const result = validateScenario([
+    d('M4', 'nura'), d('M4', 'saryarka'), d('M7', 'saryarka'),
+    d('M10', 'nura'), d('M12'),
+  ]);
+  assert.deepEqual(result.errorDetails.map(error => error.code),
+    ['DUPLICATE_MEASURE', 'INCOMPATIBLE_MEASURES']);
+});
+
+test('a duplicate with no known matching district adds no local conflict', () => {
+  const result = validateScenario([
+    d('M4', 'nura'), d('M4', 'unknown'), d('M7', 'saryarka'),
+    d('M10', 'nura'), d('M12'),
+  ]);
+  assert.deepEqual(result.errorDetails.map(error => error.code),
+    ['DUPLICATE_MEASURE', 'UNKNOWN_DISTRICT']);
+});
+
 test('multiple independent errors are returned together', () => {
   const input = [
     d('M7', 'nura'), d('M7', 'almaty'),
