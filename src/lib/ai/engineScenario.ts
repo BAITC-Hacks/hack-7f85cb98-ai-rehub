@@ -1,9 +1,60 @@
-import { DISTRICTS } from "../../../engine/index.mjs";
-import type { SimulationResult } from "../../../engine/index.mjs";
+import { DISTRICTS, MEASURES } from "../../../engine/index.mjs";
+import type { Decision, SimulationResult } from "../../../engine/index.mjs";
 
-import type { IndicatorCode, Indicators, ScenarioResult } from "@/types/simulation";
+import type { IndicatorCode, Indicators, ReplacementCandidate, ScenarioResult } from "@/types/simulation";
 
 const districtNames = new Map(DISTRICTS.map(({ id, name }) => [id, name]));
+
+/** Recover selection IDs from a locally calculated analysis for the server request. */
+export function decisionsFromAnalysis(scenario: ScenarioResult): Decision[] {
+  return scenario.contributions.map((contribution) => {
+    const measure = MEASURES.find(({ id }) => id === contribution.measureId);
+    if (!measure) throw new Error(`Неизвестная мера: ${contribution.measureId}`);
+    if (measure.scope === "city") return { measureId: measure.id };
+    const district = DISTRICTS.find(({ name }) => name === contribution.districtName);
+    if (!district) throw new Error(`Неизвестный район: ${contribution.districtName}`);
+    return { measureId: measure.id, districtId: district.id };
+  });
+}
+
+/** Only an actual one-decision improvement may be described as a replacement. */
+export function toReplacementCandidate(
+  decisions: readonly Decision[],
+  current: Extract<SimulationResult, { valid: true }>,
+  replacementDecisions: readonly Decision[],
+  replacement: Extract<SimulationResult, { valid: true }>,
+): ReplacementCandidate | null {
+  const key = (decision: Decision) => `${decision.measureId}:${decision.districtId ?? "city"}`;
+  const currentKeys = new Set(decisions.map(key));
+  const replacementKeys = new Set(replacementDecisions.map(key));
+  const removed = decisions.filter((decision) => !replacementKeys.has(key(decision)));
+  const added = replacementDecisions.filter((decision) => !currentKeys.has(key(decision)));
+  const scoreGain = replacement.result.after.score - current.result.after.score;
+  if (removed.length !== 1 || added.length !== 1 || scoreGain <= 0) return null;
+
+  const describe = (decision: Decision) => {
+    const measure = MEASURES.find(({ id }) => id === decision.measureId);
+    if (!measure) throw new Error(`Неизвестная мера: ${decision.measureId}`);
+    return {
+      decision,
+      measureName: measure.name,
+      districtName: decision.districtId ? districtNames.get(decision.districtId) : undefined,
+    };
+  };
+  const weakestDistrictId = current.result.after.weakestDistrictIds[0];
+  const weakestAfter = replacement.result.after.districts.find(({ id }) => id === weakestDistrictId);
+  if (!weakestAfter) return null;
+
+  return {
+    removed: describe(removed[0]),
+    added: describe(added[0]),
+    result: toAnalysisScenario(replacement),
+    scoreGain,
+    weakestDistrictGain: weakestAfter.score - current.result.after.weakestDistrictScore,
+    removedCriticalCount: Math.max(0,
+      current.result.after.criticalCount - replacement.result.after.criticalCount),
+  };
+}
 
 /** Adapt the engine's authoritative result to the small explanation contract. */
 export function toAnalysisScenario(simulation: Extract<SimulationResult, { valid: true }>): ScenarioResult {

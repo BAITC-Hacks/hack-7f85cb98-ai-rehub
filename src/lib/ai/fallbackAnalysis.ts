@@ -123,6 +123,17 @@ export function createFallbackAnalysis(
     );
   }
 
+  const decliningIndicators = scenario.districts.flatMap((district) =>
+    (Object.entries(district.indicatorsAfter) as [IndicatorCode, number][])
+      .filter(([code, value]) => value < district.indicatorsBefore[code])
+      .map(([code, value]) =>
+        `${district.name}: ${INDICATOR_LABELS[code]} снизился с ${formatNumber(district.indicatorsBefore[code])} до ${formatNumber(value)}`,
+      ),
+  );
+  if (decliningIndicators.length > 0) {
+    risks.push(`Снизились отдельные показатели: ${decliningIndicators.join("; ")}.`);
+  }
+
   const decliningDistricts = scenario.districts.filter(
     (district) => district.scoreDelta < 0,
   );
@@ -160,7 +171,8 @@ export function createFallbackAnalysis(
     );
   }
 
-  let summary = `Сценарий повышает Astana Quality of Life Score с ${formatNumber(scenario.baselineScore)} до ${formatNumber(scenario.finalScore)}.`;
+  const scoreDirection = scenario.scoreDelta > 0 ? "повышает" : scenario.scoreDelta < 0 ? "снижает" : "не меняет";
+  let summary = `Сценарий ${scoreDirection} Astana Quality of Life Score с ${formatNumber(scenario.baselineScore)} до ${formatNumber(scenario.finalScore)}.`;
 
   if (candidate) {
     const removed = describeChange(candidate.removed);

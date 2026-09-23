@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { currentScenarioFixture, replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
 import { POST } from "@/app/api/analyze/route";
 import { EXAMPLE_DECISIONS, simulateScenario } from "../../../../engine/index.mjs";
 
@@ -25,15 +24,11 @@ describe("POST /api/analyze", () => {
     expect(calculated.validation.budget.spent).toBe(95);
     expect(calculated.result.after.score).toBe(56.54307);
 
-    const response = await POST(request({
-      decisions: EXAMPLE_DECISIONS,
-      scenario: { finalScore: 999 },
-    }));
+    const response = await POST(request({ decisions: EXAMPLE_DECISIONS }));
     const analysis = await response.json();
     expect(response.status).toBe(200);
     expect(analysis.source).toBe("fallback");
     expect(analysis.summary).toContain("56,54");
-    expect(analysis.summary).not.toContain("999");
     expect(analysis.strengths.join(" ")).toContain("M10 + M12");
   });
 
@@ -72,39 +67,50 @@ describe("POST /api/analyze", () => {
     expect(body.validation.budget.spent).toBe(113);
   });
 
-  it("returns deterministic fallback without an API key", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "");
-    const response = await POST(request({ scenario: currentScenarioFixture }));
-    const analysis = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(analysis.source).toBe("fallback");
-    expect(analysis.summary).toContain("56,54");
-  });
-
-  it("explains the verified replacement", async () => {
+  it("recalculates and explains a one-decision replacement", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     const response = await POST(request({
-      scenario: currentScenarioFixture,
-      candidate: replacementCandidateFixture,
+      decisions: EXAMPLE_DECISIONS,
+      replacementDecisions: [
+        ...EXAMPLE_DECISIONS.filter(({ measureId }) => measureId !== "M5"),
+        { measureId: "M3", districtId: "nura" },
+      ],
     }));
     const analysis = await response.json();
 
     expect(response.status).toBe(200);
     expect(analysis.recommendations.join(" ")).toContain("M3");
+    expect(analysis.summary).toContain("57,21");
   });
 
-  it("rejects malformed input", async () => {
-    const response = await POST(request({ scenario: { valid: true } }));
+  it("rejects client-supplied results and costs", async () => {
+    const response = await POST(request({ decisions: EXAMPLE_DECISIONS, scenario: { finalScore: 999 } }));
     expect(response.status).toBe(400);
   });
 
-  it("rejects inconsistent candidate math", async () => {
+  it("rejects a replacement that changes two decisions", async () => {
     const response = await POST(request({
-      scenario: currentScenarioFixture,
-      candidate: { ...replacementCandidateFixture, scoreGain: 42 },
+      decisions: EXAMPLE_DECISIONS,
+      replacementDecisions: [
+        ...EXAMPLE_DECISIONS.filter(({ measureId }) => !["M5", "M10"].includes(measureId)),
+        { measureId: "M3", districtId: "nura" },
+        { measureId: "M11", districtId: "nura" },
+      ],
     }));
     expect(response.status).toBe(400);
+  });
+
+  it("rejects a globally incompatible M1 and M3 pair", async () => {
+    const response = await POST(request({ decisions: [
+      { measureId: "M1", districtId: "nura" },
+      { measureId: "M3", districtId: "yesil" },
+      { measureId: "M4", districtId: "saryarka" },
+      { measureId: "M9", districtId: "almaty" },
+      { measureId: "M10", districtId: "baikonur" },
+    ] }));
+    const body = await response.json();
+    expect(response.status).toBe(400);
+    expect(body.validation.errors.map(({ code }: { code: string }) => code)).toContain("INCOMPATIBLE_MEASURES");
   });
 
   it("rejects invalid JSON", async () => {

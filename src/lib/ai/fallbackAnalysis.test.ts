@@ -5,6 +5,8 @@ import {
   replacementCandidateFixture,
 } from "@/lib/ai/__fixtures__/scenarioFixtures";
 import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
+import { toAnalysisScenario } from "@/lib/ai/engineScenario";
+import { simulateScenario } from "../../../engine/index.mjs";
 
 describe("createFallbackAnalysis", () => {
   it("explains a valid scenario using only calculated facts", () => {
@@ -44,6 +46,22 @@ describe("createFallbackAnalysis", () => {
     expect(
       JSON.stringify({ currentScenarioFixture, replacementCandidateFixture }),
     ).toBe(before);
+  });
+
+  it("reports an indicator decline even when the total Score improves", () => {
+    const simulation = simulateScenario([
+      { measureId: "M9", districtId: "nura" },
+      { measureId: "M11", districtId: "nura" },
+      { measureId: "M10", districtId: "nura" },
+      { measureId: "M12" },
+      { measureId: "M4", districtId: "saryarka" },
+    ]);
+    expect(simulation.valid).toBe(true);
+    if (!simulation.valid) return;
+
+    const analysis = createFallbackAnalysis(toAnalysisScenario(simulation));
+    expect(analysis.summary).toContain("55,34");
+    expect(analysis.risks.join(" ")).toContain("разгрузка дорог снизился с 55,00 до 53,25");
   });
 });
 

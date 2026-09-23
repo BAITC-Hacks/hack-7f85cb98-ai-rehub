@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { currentScenarioFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
+import { currentScenarioFixture, replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
 import { requestScenarioAnalysis } from "@/lib/ai/requestScenarioAnalysis";
 
 const validAnalysis = {
@@ -13,14 +13,25 @@ const validAnalysis = {
 };
 
 describe("requestScenarioAnalysis", () => {
-  it("sends the calculated scenario and accepts a valid answer", async () => {
+  it("sends decision IDs for server recalculation and accepts a valid answer", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(validAnalysis), { status: 200 }));
     const outcome = await requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher });
 
     expect(outcome.analysis.source).toBe("openai");
     expect(outcome.error).toBeNull();
     expect(fetcher).toHaveBeenCalledWith("/api/analyze", expect.objectContaining({ method: "POST" }));
-    expect(JSON.parse(fetcher.mock.calls[0][1].body).scenario.finalScore).toBe(56.54307);
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.decisions).toHaveLength(5);
+    expect(body.decisions).toContainEqual({ measureId: "M12" });
+    expect(body).not.toHaveProperty("scenario");
+  });
+
+  it("sends a one-decision replacement for server recalculation", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(validAnalysis), { status: 200 }));
+    await requestScenarioAnalysis(currentScenarioFixture, replacementCandidateFixture, { fetcher });
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.replacementDecisions).toContainEqual({ measureId: "M3", districtId: "nura" });
+    expect(body).not.toHaveProperty("candidate");
   });
 
   it("keeps server fallback as a normal response", async () => {
@@ -39,6 +50,15 @@ describe("requestScenarioAnalysis", () => {
 
     expect(outcome.analysis.source).toBe("fallback");
     expect(outcome.error).toContain("локальный");
+  });
+
+  it("recalculates a local fallback instead of trusting a supplied Score", async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error("offline"));
+    const fakeScenario = { ...currentScenarioFixture, finalScore: 999, scoreDelta: 946 };
+    const outcome = await requestScenarioAnalysis(fakeScenario, undefined, { fetcher });
+    expect(outcome.analysis.source).toBe("fallback");
+    expect(outcome.analysis.summary).toContain("56,54");
+    expect(outcome.analysis.summary).not.toContain("999");
   });
 
   it("uses local fallback for malformed server output", async () => {
