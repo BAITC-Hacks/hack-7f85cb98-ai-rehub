@@ -1,0 +1,86 @@
+{
+  "contractVersion": "2.0.0",
+  "integrationBranch": "feature/simulation-engine",
+  "sourceCommit": "382ef6950414a7a8f66fb1dee0d8e048f0ce83ec",
+  "baseShaPolicy": "Use the published starter commit SHA supplied by main; all four branches start at that same SHA.",
+  "deadline": {
+    "at": null,
+    "timezone": "Asia/Aqtau",
+    "remainingMinutes": null,
+    "status": "not_supplied",
+    "note": "No new 5-hour countdown. Reserve last30% for integration; obtain actual deadline from user."
+  },
+  "runtime": "Pure TypeScript ESM; canonical implementation in src/domain; Node >=22.18 for built-in TS test runner",
+  "commands": {
+    "install": "npm install",
+    "typecheck": "npm run typecheck:engine",
+    "tests": "npm run test:engine",
+    "oneRole": "node scripts/test-engine.mjs tests/engine/ROLE.test.ts",
+    "reference": "npm run test:legacy"
+  },
+  "mainOwned": [
+    "src/types/simulation.ts",
+    "src/domain/index.ts",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.engine.json",
+    "scripts/",
+    "tests/simulation.test.ts",
+    "tests/contract-types.ts",
+    "docs/engine/parallel-contract.md",
+    "docs/engine/dispatch.json",
+    "docs/engine/integration-report.md",
+    "docs/engine/handoff.md"
+  ],
+  "roles": {
+    "data": {
+      "threadId": "01a0cd8f-ce08-7aa2-958a-471a412829ff",
+      "branch": "feature/engine-data",
+      "paths": [
+        "src/data/districts.ts",
+        "src/data/measures.ts",
+        "src/data/rules.ts",
+        "tests/engine/data.test.ts",
+        "docs/engine/handoffs/data.md"
+      ]
+    },
+    "validation": {
+      "threadId": "01a0cd90-0e9f-77e3-b7a2-9b59cae86291",
+      "branch": "feature/engine-validation",
+      "paths": [
+        "src/domain/validateScenario.ts",
+        "tests/engine/validation.test.ts",
+        "docs/engine/handoffs/validation.md"
+      ]
+    },
+    "evaluation": {
+      "threadId": "01a0cd90-7dd0-76c1-8a64-b83146be41dc",
+      "branch": "feature/engine-evaluation",
+      "paths": [
+        "src/domain/evaluateScenario.ts",
+        "src/domain/indicatorMath.ts",
+        "tests/engine/evaluation.test.ts",
+        "docs/engine/handoffs/evaluation.md"
+      ]
+    },
+    "advisor": {
+      "threadId": "01a0cd90-ec5c-73e2-bf3f-b58e34fd80bf",
+      "branch": "feature/engine-advisor",
+      "paths": [
+        "src/domain/findBestReplacement.ts",
+        "tests/engine/advisor.test.ts",
+        "docs/engine/handoffs/advisor.md"
+      ]
+    }
+  },
+  "integrationOrder": [
+    "data",
+    "validation",
+    "evaluation",
+    "advisor"
+  ],
+  "status": "contract-only; TS implementations are assigned to workers, no success stubs",
+  "baselineExpected": 52.55768,
+  "exampleExpected": 56.54307,
+  "secondExampleExpected": 57.236735
+}

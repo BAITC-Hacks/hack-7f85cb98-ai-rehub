@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "lib": ["ES2022", "DOM"],
+    "module": "ESNext", "moduleResolution": "Bundler",
+    "strict": true, "exactOptionalPropertyTypes": true,
+    "allowImportingTsExtensions": true, "noEmit": true,
+    "verbatimModuleSyntax": true, "skipLibCheck": true
+  },
+  "include": ["src/data/**/*.ts", "src/domain/**/*.ts", "src/types/simulation.ts", "tests/**/*.ts"]
+}
