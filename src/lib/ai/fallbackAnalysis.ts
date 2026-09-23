@@ -48,15 +48,15 @@ function getMostImprovedDistrict(
   }, undefined);
 }
 
-function getCriticalIndicators(scenario: ScenarioResult): string[] {
+function getCriticalIndicators(scenario: ScenarioResult): { text: string; value: number }[] {
   return scenario.districts.flatMap((district) =>
     (Object.entries(district.indicatorsAfter) as [IndicatorCode, number][])
       .filter(([, value]) => value < 40)
-      .map(
-        ([indicator, value]) =>
-          `${district.name}: ${INDICATOR_LABELS[indicator]} (${formatNumber(value)})`,
-      ),
-  );
+      .map(([indicator, value]) => ({
+        text: `${district.name}: ${INDICATOR_LABELS[indicator]} (${formatNumber(value)})`,
+        value,
+      })),
+  ).sort((a, b) => a.value - b.value);
 }
 
 function describeChange(change: ReplacementCandidate["added"]): string {
@@ -119,7 +119,7 @@ export function createFallbackAnalysis(
 
   if (criticalIndicators.length > 0) {
     risks.push(
-      `После реализации остаются критические показатели: ${criticalIndicators.join("; ")}.`,
+      `После реализации остаются критические показатели: ${criticalIndicators.slice(0, 3).map(({ text }) => text).join("; ")}${criticalIndicators.length > 3 ? `; другие критические показатели: ${criticalIndicators.length - 3}` : ""}.`,
     );
   }
 
@@ -127,11 +127,11 @@ export function createFallbackAnalysis(
     (Object.entries(district.indicatorsAfter) as [IndicatorCode, number][])
       .filter(([code, value]) => value < district.indicatorsBefore[code])
       .map(([code, value]) =>
-        `${district.name}: ${INDICATOR_LABELS[code]} снизился с ${formatNumber(district.indicatorsBefore[code])} до ${formatNumber(value)}`,
+        `${district.name}: показатель «${INDICATOR_LABELS[code]}» снизился с ${formatNumber(district.indicatorsBefore[code])} до ${formatNumber(value)}`,
       ),
   );
   if (decliningIndicators.length > 0) {
-    risks.push(`Снизились отдельные показатели: ${decliningIndicators.join("; ")}.`);
+    risks.push(`Снизились отдельные показатели: ${decliningIndicators.slice(0, 3).join("; ")}${decliningIndicators.length > 3 ? `; ещё ${decliningIndicators.length - 3}` : ""}.`);
   }
 
   const decliningDistricts = scenario.districts.filter(

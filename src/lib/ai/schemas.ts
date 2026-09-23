@@ -5,14 +5,15 @@ export const analyzeRequestSchema = z.strictObject({
   replacementDecisions: z.unknown().optional(),
 });
 
-export const modelAnalysisSchema = z.object({
+export const modelPrioritiesSchema = z.strictObject({
+  priorityIds: z.array(z.string()).max(8),
+});
+
+export const analysisResponseSchema = z.object({
   summary: z.string().trim().min(1).max(600),
   strengths: z.array(z.string().trim().min(1).max(350)).max(5),
   risks: z.array(z.string().trim().min(1).max(350)).max(5),
   tradeoffs: z.array(z.string().trim().min(1).max(350)).max(5),
   recommendations: z.array(z.string().trim().min(1).max(350)).min(1).max(5),
-});
-
-export const analysisResponseSchema = modelAnalysisSchema.extend({
   source: z.enum(["openai", "fallback"]),
 });

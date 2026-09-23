@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai/__fixtures__/scenarioFixtures";
 import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
 import { toAnalysisScenario } from "@/lib/ai/engineScenario";
+import { analysisResponseSchema } from "@/lib/ai/schemas";
 import { simulateScenario } from "../../../engine/index.mjs";
 
 describe("createFallbackAnalysis", () => {
@@ -61,7 +62,30 @@ describe("createFallbackAnalysis", () => {
 
     const analysis = createFallbackAnalysis(toAnalysisScenario(simulation));
     expect(analysis.summary).toContain("55,34");
-    expect(analysis.risks.join(" ")).toContain("разгрузка дорог снизился с 55,00 до 53,25");
+    expect(analysis.risks.join(" ")).toContain("показатель «разгрузка дорог» снизился с 55,00 до 53,25");
+  });
+
+  it.each([0, 100])("keeps the response valid when all indicators equal %i", (value) => {
+    const scenario = {
+      ...currentScenarioFixture,
+      baselineScore: value,
+      finalScore: value,
+      scoreDelta: 0,
+      criticalBefore: value === 0 ? 50 : 0,
+      criticalAfter: value === 0 ? 50 : 0,
+      districts: currentScenarioFixture.districts.map((district) => ({
+        ...district,
+        scoreBefore: value,
+        scoreAfter: value,
+        scoreDelta: 0,
+        indicatorsBefore: Object.fromEntries(Object.keys(district.indicatorsBefore).map((code) => [code, value])) as typeof district.indicatorsBefore,
+        indicatorsAfter: Object.fromEntries(Object.keys(district.indicatorsAfter).map((code) => [code, value])) as typeof district.indicatorsAfter,
+      })),
+    };
+    const analysis = createFallbackAnalysis(scenario);
+    expect(analysisResponseSchema.safeParse(analysis).success).toBe(true);
+    expect(analysis.risks.join(" ").includes("критические показатели")).toBe(value === 0);
+    if (value === 0) expect(analysis.risks.join(" ")).toContain("другие критические показатели: 47");
   });
 });
 

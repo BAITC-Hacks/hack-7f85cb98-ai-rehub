@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { currentScenarioFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
+import { currentScenarioFixture, replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
+import { createFallbackAnalysis } from "@/lib/ai/fallbackAnalysis";
 
 const parse = vi.hoisted(() => vi.fn());
 vi.mock("openai", () => ({
@@ -17,53 +18,52 @@ afterEach(() => {
 });
 
 describe("analyzeScenario", () => {
-  it("accepts a structured model response", async () => {
+  it("uses model priorities without changing or omitting verified facts", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-key");
     parse.mockResolvedValue({ status: "completed", output_parsed: {
-      summary: "Городской результат вырос.",
-      strengths: ["Улучшились социальные услуги."],
-      risks: ["Один район остаётся слабее остальных."],
-      tradeoffs: ["План расходует большую часть бюджета."],
-      recommendations: ["Проверить замену одной меры."],
+      priorityIds: ["risks:0", "strengths:2", "strengths:0"],
     } });
 
+    const verified = createFallbackAnalysis(currentScenarioFixture);
     const result = await analyzeScenario(currentScenarioFixture);
     expect(result.source).toBe("openai");
+    expect(result.summary).toBe(verified.summary);
+    expect(result.strengths).toEqual([
+      verified.strengths[2], verified.strengths[0], ...verified.strengths.slice(1, 2),
+      ...verified.strengths.slice(3),
+    ]);
+    expect(result.risks).toEqual(verified.risks);
+    expect(result.recommendations).toEqual(verified.recommendations);
     expect(parse).toHaveBeenCalledOnce();
+    const request = parse.mock.calls[0][0];
+    const cards = JSON.parse(request.input[1].content).cards;
+    expect(cards.find((card: { id: string }) => card.id === "risks:0").text).toBe(verified.risks[0]);
+  });
+
+  it("keeps the verified replacement recommendation", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue({ status: "completed", output_parsed: { priorityIds: ["recommendations:0"] } });
+    const result = await analyzeScenario(currentScenarioFixture, replacementCandidateFixture);
+    expect(result.source).toBe("openai");
+    expect(result.recommendations.join(" ")).toContain("M3");
+    expect(result.recommendations.join(" ")).toContain("0,66");
+  });
+
+  it.each([
+    { priorityIds: ["risks:999"] },
+    { priorityIds: ["risks:0", "risks:0"] },
+    { priorityIds: [] },
+    { priorityIds: ["риски из головы"] },
+    { summary: "Результат вырос на 99 пунктов.", priorityIds: ["risks:0"] },
+  ])("falls back on invalid model output: %j", async (output) => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue({ status: "completed", output_parsed: output });
+    expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
   });
 
   it("falls back on API failure", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-key");
     parse.mockRejectedValue(new Error("network unavailable"));
-    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
-  });
-
-  it("falls back when the model adds unsupported figures", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "test-key");
-    parse.mockResolvedValue({ status: "completed", output_parsed: {
-      summary: "Результат вырос на 99 пунктов.",
-      strengths: [], risks: [], tradeoffs: [], recommendations: ["Продолжить."],
-    } });
-    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
-  });
-
-  it("falls back when a model field contains draft or format notes", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "test-key");
-    parse.mockResolvedValue({ status: "completed", output_parsed: {
-      summary: "Результат вырос.",
-      strengths: [], risks: [], tradeoffs: [],
-      recommendations: ["Wait, JSON invalid. Need fix."],
-    } });
-    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
-  });
-
-  it("falls back when critical indicators are described as critical districts", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "test-key");
-    parse.mockResolvedValue({ status: "completed", output_parsed: {
-      summary: "Результат вырос.",
-      strengths: [], risks: ["Число критических районов не снизилось."], tradeoffs: [],
-      recommendations: ["Проверить оставшиеся проблемы."],
-    } });
-    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
+    expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
   });
 });
