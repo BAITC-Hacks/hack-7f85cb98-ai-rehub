@@ -67,6 +67,19 @@ describe("requestScenarioAnalysis", () => {
     expect(outcome.analysis.source).toBe("fallback");
   });
 
+  it("uses local fallback when the server sends broken JSON", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("{broken", { status: 200 }));
+    const outcome = await requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher });
+    expect(outcome.analysis.source).toBe("fallback");
+    expect(outcome.analysis.summary).toContain("56,54");
+  });
+
+  it("uses local fallback for a server error response", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 }));
+    const outcome = await requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher });
+    expect(outcome.analysis.source).toBe("fallback");
+  });
+
   it("does not show stale fallback after cancellation", async () => {
     const controller = new AbortController();
     controller.abort();

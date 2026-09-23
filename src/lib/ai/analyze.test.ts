@@ -66,4 +66,20 @@ describe("analyzeScenario", () => {
     parse.mockRejectedValue(new Error("network unavailable"));
     expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
   });
+
+  it.each([
+    { status: "completed", output_parsed: "{broken" },
+    { status: "completed", output_parsed: null },
+    { status: "incomplete", output_parsed: { priorityIds: ["risks:0"] } },
+  ])("falls back when the model response is not valid JSON data: %j", async (response) => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue(response);
+    expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
+  });
+
+  it("falls back when the SDK cannot parse model JSON", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockRejectedValue(new SyntaxError("Unexpected end of JSON input"));
+    expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
+  });
 });
