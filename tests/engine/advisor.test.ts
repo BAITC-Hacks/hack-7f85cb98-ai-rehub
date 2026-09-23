@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { DISTRICTS } from '../../src/data/districts.ts';
 import { MEASURES } from '../../src/data/measures.ts';
-import { EXAMPLE_DECISIONS } from '../../src/data/rules.ts';
+import { EXAMPLE_DECISIONS, SECOND_EXAMPLE_DECISIONS } from '../../src/data/rules.ts';
 import { evaluateScenario } from '../../src/domain/evaluateScenario.ts';
 import { findBestReplacement } from '../../src/domain/findBestReplacement.ts';
 import { validateScenario } from '../../src/domain/validateScenario.ts';
@@ -116,6 +116,25 @@ test('integration: exhaustive independent enumeration matches all rankings and c
   assert.equal(new Set(actual.topAlternatives.map(item => item.key)).size, actual.topAlternatives.length);
   for (const candidate of winners(actual)) assertCandidate(candidate, input, actual.current);
   assert.ok(actual.evaluatedCandidates <= 225);
+});
+
+test('integration: a valid local optimum still returns negative-gain replacements', () => {
+  const input = clone(SECOND_EXAMPLE_DECISIONS);
+  const expected = independentlyRank(input);
+  const actual = findBestReplacement(input);
+  assert.equal(actual.current.valid, true);
+  if (!actual.current.valid) throw new Error('Expected valid current scenario');
+  assert.ok(actual.validCandidates > 0);
+  assert.equal(actual.validCandidates, expected.candidates.size);
+  assert.equal(actual.evaluatedCandidates, expected.considered);
+  assert.deepEqual(actual.topAlternatives.map(item => item.key), expected.score.slice(0, 3).map(item => item.key));
+  assert.equal(actual.bestByScore?.key, expected.score[0]?.key);
+  assert.equal(actual.bestForWeakestDistrict?.key, expected.weakest[0]?.key);
+  assert.equal(actual.bestFastImpact?.key, expected.fast[0]?.key);
+  assert.ok(actual.bestByScore && actual.bestByScore.scoreGain < 0);
+  assert.ok(actual.bestFastImpact && actual.bestFastImpact.scoreGain < actual.bestByScore.scoreGain);
+  assert.equal(actual.bestByScore.key, actual.bestForWeakestDistrict?.key);
+  for (const candidate of winners(actual)) assertCandidate(candidate, input, actual.current);
 });
 
 test('input order does not change selected scenario keys or scores', () => {
