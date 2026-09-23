@@ -1,5 +1,7 @@
 import { analyzeScenario } from "@/lib/ai/analyze";
+import { toAnalysisScenario } from "@/lib/ai/engineScenario";
 import { analyzeRequestSchema } from "@/lib/ai/schemas";
+import { simulateScenario } from "../../../../engine/index.mjs";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -7,6 +9,17 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return Response.json({ error: "Некорректный JSON" }, { status: 400 });
+  }
+
+  if (body !== null && typeof body === "object" && "decisions" in body) {
+    const simulation = simulateScenario((body as { decisions: unknown }).decisions);
+    if (!simulation.valid) {
+      return Response.json({
+        error: "Некорректный набор решений",
+        validation: simulation.validation,
+      }, { status: 400 });
+    }
+    return Response.json(await analyzeScenario(toAnalysisScenario(simulation)));
   }
 
   const parsed = analyzeRequestSchema.safeParse(body);
