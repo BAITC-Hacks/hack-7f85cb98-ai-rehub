@@ -61,3 +61,7 @@ export const modelAnalysisSchema = z.object({
   tradeoffs: z.array(z.string().trim().min(1).max(350)).max(5),
   recommendations: z.array(z.string().trim().min(1).max(350)).min(1).max(5),
 });
+
+export const analysisResponseSchema = modelAnalysisSchema.extend({
+  source: z.enum(["openai", "fallback"]),
+});

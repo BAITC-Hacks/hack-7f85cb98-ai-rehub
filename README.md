@@ -29,6 +29,15 @@ const analysis: ScenarioAnalysis = await response.json();
 
 `candidate` можно не передавать. Успешный ответ имеет поля `source`, `summary`, `strengths`, `risks`, `tradeoffs`, `recommendations`. `source` показывает `openai` или `fallback`. Неверный JSON, неполный результат или противоречивый прирост кандидата возвращают HTTP 400. Сценарий с `valid: false` возвращает объяснение ошибок через fallback.
 
+Для клиентского экрана используйте `useScenarioAnalysis` из `src/lib/ai/useScenarioAnalysis.ts`:
+
+```tsx
+const { analysis, loading, error, retry } = useScenarioAnalysis(scenario, candidate);
+<AIAnalysis analysis={analysis} loading={loading} />
+```
+
+Передавайте в хук только рассчитанный `scenario`, а после поиска замены — также `candidate`. Хук отменяет устаревшие запросы при смене сценария. `error` содержит короткое пользовательское сообщение, а `retry()` повторяет запрос. Даже при сетевой ошибке `analysis` содержит локальный fallback; при обычном серверном fallback ошибки нет. Пока результат не рассчитан, передайте `null` вместо `scenario`.
+
 Маршрут: `src/app/api/analyze/route.ts`. Серверный OpenAI-анализ: `src/lib/ai/analyze.ts`. Детерминированное объяснение: `src/lib/ai/fallbackAnalysis.ts`. Примеры двух сценариев: `src/lib/ai/__fixtures__/scenarioFixtures.ts`.
 
 OpenAI Responses API вызывается со структурированным ответом. Если API недоступен, ответ пустой или содержит непроверенные цифры, используется fallback. Все числовые показатели интерфейс должен показывать непосредственно из результата расчётного движка. Модель получает готовые данные, поэтому обучение модели на районном датасете не требуется.
