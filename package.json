@@ -1,0 +1,46 @@
+{
+  "name": "ai-rehub",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "npm run test:app && npm run test:engine && npm run test:legacy",
+    "test:engine": "node scripts/test-engine.mjs",
+    "test:legacy": "node --test tests/reference/engine/test/*.test.mjs",
+    "typecheck:engine": "tsc --noEmit -p tsconfig.engine.json",
+    "benchmark:engine": "node --experimental-strip-types scripts/benchmark-engine.ts",
+    "build:engine": "tsc -p tsconfig.engine.build.json",
+    "smoke:engine": "node scripts/smoke-built.mjs",
+    "smoke:browser:prepare": "node scripts/write-browser-smoke.mjs",
+    "test:app": "vitest run",
+    "typecheck": "next typegen && tsc --noEmit && npm run typecheck:engine",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:engine && npm run smoke:engine",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "16.3.6",
+    "openai": "^7.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.1"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
