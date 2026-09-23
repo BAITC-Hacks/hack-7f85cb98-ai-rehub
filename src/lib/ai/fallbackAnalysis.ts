@@ -6,7 +6,7 @@ import type {
   ScenarioResult,
 } from "@/types/simulation";
 
-const INDICATOR_LABELS: Record<IndicatorCode, string> = {
+export const INDICATOR_LABELS: Record<IndicatorCode, string> = {
   T1: "разгрузка дорог",
   T2: "доступность общественного транспорта",
   E1: "озеленение",

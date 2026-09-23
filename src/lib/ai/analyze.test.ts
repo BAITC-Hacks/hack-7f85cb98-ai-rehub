@@ -46,4 +46,24 @@ describe("analyzeScenario", () => {
     } });
     expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
   });
+
+  it("falls back when a model field contains draft or format notes", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue({ status: "completed", output_parsed: {
+      summary: "Результат вырос.",
+      strengths: [], risks: [], tradeoffs: [],
+      recommendations: ["Wait, JSON invalid. Need fix."],
+    } });
+    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
+  });
+
+  it("falls back when critical indicators are described as critical districts", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue({ status: "completed", output_parsed: {
+      summary: "Результат вырос.",
+      strengths: [], risks: ["Число критических районов не снизилось."], tradeoffs: [],
+      recommendations: ["Проверить оставшиеся проблемы."],
+    } });
+    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
+  });
 });
