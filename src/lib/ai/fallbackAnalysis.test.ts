@@ -100,3 +100,31 @@ describe("createFallbackAnalysis", () => {
   });
 });
 
+
+
+describe("district rank wording", () => {
+  it("does not claim the weakest district remained the same after its identity changed", () => {
+    const scenario = {
+      ...currentScenarioFixture,
+      districts: currentScenarioFixture.districts.map((district, index) => ({
+        ...district, scoreBefore: index === 0 ? 60 : 50,
+        scoreAfter: index === 0 ? 45 : 60, scoreDelta: index === 0 ? -15 : 10,
+      })),
+    };
+    const analysis = createFallbackAnalysis(scenario);
+    expect(analysis.risks[0]).toContain(scenario.districts[0].name);
+    expect(analysis.risks[0]).not.toContain("остаётся");
+    expect(analysis.strengths.join(" ")).toContain("Одинаковый наибольший прирост");
+  });
+
+  it("names every tied weakest district instead of claiming a unique weakest", () => {
+    const scenario = {
+      ...currentScenarioFixture,
+      districts: currentScenarioFixture.districts.map((district) => ({ ...district, scoreAfter: 60, scoreDelta: 1 })),
+    };
+    const analysis = createFallbackAnalysis(scenario);
+    for (const district of scenario.districts) expect(analysis.risks[0]).toContain(district.name);
+    expect(analysis.risks[0]).toContain("одинаков");
+    expect(analysisResponseSchema.safeParse(analysis).success).toBe(true);
+  });
+});

@@ -6,10 +6,10 @@ import type { BaselineDistrict, DistrictResult } from "@/types/simulation";
 import { deltaTone, directionName, districtName, districtProfile, formatDelta, formatScore, metricLabel, t, type Language } from "../i18n";
 import DistrictCard from "./DistrictCard";
 
-type Props = { districts: (BaselineDistrict | DistrictResult)[]; baseline: boolean; weakestId?: string; language: Language };
+type Props = { districts: (BaselineDistrict | DistrictResult)[]; baseline: boolean; weakestIds: readonly string[]; language: Language };
 
-export default function DistrictComparison({ districts, baseline, weakestId, language }: Props) {
-  const [selectedId, setSelectedId] = useState(weakestId || districts[0].districtId);
+export default function DistrictComparison({ districts, baseline, weakestIds, language }: Props) {
+  const [selectedId, setSelectedId] = useState(weakestIds[0] || districts[0].districtId);
   const [changedOnly, setChangedOnly] = useState(false);
   const selected = districts.find((district) => district.districtId === selectedId) || districts[0];
   const before = "indicators" in selected ? selected.indicators : selected.indicatorsBefore;
@@ -21,7 +21,7 @@ export default function DistrictComparison({ districts, baseline, weakestId, lan
     <section className="district-section" id="districts" aria-labelledby="districts-title">
       <div className="section-header"><div><h2 id="districts-title">{t(language, "whatChanges")}</h2><p>{t(language, "exploreDistricts")}</p></div><span className="section-count">05</span></div>
       <div className="district-grid" role="group" aria-label={t(language, "chooseDistrict")}>
-        {districts.map((district) => <DistrictCard key={district.districtId} district={district} baseline={baseline} language={language} weakest={weakestId === district.districtId} selected={selected.districtId === district.districtId} onSelect={() => setSelectedId(district.districtId)} />)}
+        {districts.map((district) => <DistrictCard key={district.districtId} district={district} baseline={baseline} language={language} weakest={weakestIds.includes(district.districtId)} selected={selected.districtId === district.districtId} onSelect={() => setSelectedId(district.districtId)} />)}
       </div>
       <div className="district-detail" id="district-detail" role="region" aria-label={t(language, "districtDetails", { district: districtName(language, selected.districtId) })}>
         <div className="detail-heading"><div><h3>{districtName(language, selected.districtId)} <span>· {t(language, "indicators")}</span></h3><p>{districtProfile(language, selected.districtId)}</p></div><div className="segmented-control" role="group" aria-label={t(language, "indicators")}><button type="button" aria-pressed={!changedOnly || baseline} onClick={() => setChangedOnly(false)}>{t(language, "allIndicators")}</button><button type="button" aria-pressed={changedOnly && !baseline} disabled={baseline} onClick={() => setChangedOnly(true)}>{t(language, "changedOnly")}</button></div></div>

@@ -65,7 +65,7 @@ export default function SimulatorPage() {
               setResult(evaluated.valid ? evaluated : null);
               setAdvisor(null);
               setAdvisorSearched(false);
-              if ("savedAt" in saved && typeof saved.savedAt === "string") setSavedAt(saved.savedAt);
+              if ("savedAt" in saved && typeof saved.savedAt === "string" && Number.isFinite(Date.parse(saved.savedAt))) setSavedAt(saved.savedAt);
             }
           }
         }
@@ -201,7 +201,7 @@ export default function SimulatorPage() {
           <BudgetBar spent={spent} decisionCount={activeDecisions.length} directionCount={directionCount} language={language} />
           <div className="panel-divider" />
           <div className="plan-decision-list">{decisions.map((decision, index) => <DecisionSlot key={index} index={index} decision={decision} measures={MEASURES} districts={DISTRICTS} disabledMeasureIds={activeDecisions.map((item) => item.measureId)} language={language} onChange={updateDecision} />)}</div>
-          <div className={`validation-note ${validation.valid ? "is-valid" : "is-invalid"}`} role="status"><span aria-hidden="true">{validation.valid ? "✓" : "!"}</span><p>{validation.valid ? t(language, "valid") : localizedValidation(language, validation)}</p></div>
+          <div className={`validation-note ${validation.valid ? "is-valid" : "is-invalid"}`} role="status"><span aria-hidden="true">{validation.valid ? "✓" : "!"}</span>{validation.valid ? <p>{t(language, "valid")}</p> : <ul>{localizedValidation(language, validation, activeDecisions).map((message, index) => <li key={index}>{message}</li>)}</ul>}</div>
           <button className="button button-primary calculate-button" disabled={!validation.valid} onClick={calculate}>{t(language, "calculate")}</button>
           <details className="rules-note"><summary>{t(language, "rulesLabel")}</summary><p>{t(language, "rules")}</p></details>
           <div className="plan-actions"><button type="button" onClick={loadExample}>{t(language, "loadExample")}</button><button type="button" onClick={reset}>{t(language, "reset")}</button></div>
@@ -209,7 +209,7 @@ export default function SimulatorPage() {
 
         <div className="results-area">
           <ScenarioSummary result={result} baselineScore={baseline.score} spent={spent} language={language} analysisLoading={visibleAnalysisLoading} analysisMode={analysisMode} />
-          <DistrictComparison districts={districtsToShow} baseline={!result} language={language} weakestId={result?.weakestDistrictIds[0] ?? baseline.weakestDistrictIds[0]} />
+          <DistrictComparison districts={districtsToShow} baseline={!result} language={language} weakestIds={result?.weakestDistrictIds ?? baseline.weakestDistrictIds} />
           <div className="insight-grid"><AdvisorComparison current={result} advisor={bestCandidate ?? null} loading={advisorLoading} searched={advisorSearched} language={language} onFind={findReplacement} onApply={applyReplacement} /><AIAnalysis analysis={visibleAnalysis} loading={visibleAnalysisLoading} mode={analysisMode} error={language === "ru" ? ai.error : null} language={language} onRetry={ai.retry} /></div>
         </div>
       </main>

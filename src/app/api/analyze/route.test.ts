@@ -176,3 +176,23 @@ describe("POST /api/analyze", () => {
     expect(analysis.summary).toContain("56,54");
   });
 });
+
+
+describe("bounded API input", () => {
+  it.each([null, "20000", "1"])("rejects oversized bytes without calling OpenAI: content-length=%s", async (length) => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    const response = await POST(new Request("http://localhost/api/analyze", {
+      method: "POST", headers: length === null ? undefined : { "content-length": length },
+      body: JSON.stringify({ decisions: EXAMPLE_DECISIONS, padding: "я".repeat(9000) }),
+    }));
+    expect(response.status).toBe(413);
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it.each([null, [], "instructions", 42, {}, { decisions: null }])("rejects malformed shapes without a paid call: %j", async (body) => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    const response = await POST(request(body));
+    expect(response.status).toBe(400);
+    expect(parse).not.toHaveBeenCalled();
+  });
+});

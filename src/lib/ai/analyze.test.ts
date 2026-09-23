@@ -83,3 +83,30 @@ describe("analyzeScenario", () => {
     expect(await analyzeScenario(currentScenarioFixture)).toEqual(createFallbackAnalysis(currentScenarioFixture));
   });
 });
+
+
+describe("verified calculation context", () => {
+  it("supplies actual measure costs, lag-adjusted effects, district deltas and replacement facts", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    parse.mockResolvedValue({ status: "completed", output_parsed: { priorityIds: ["risks:0"] } });
+    await analyzeScenario(currentScenarioFixture, replacementCandidateFixture);
+    const payload = JSON.parse(parse.mock.calls[0][0].input[1].content);
+    expect(payload.calculation.decisions).toEqual(currentScenarioFixture.decisions);
+    expect(payload.calculation.totalCost).toBe(95);
+    expect(payload.calculation.finalScore).toBe(currentScenarioFixture.finalScore);
+    expect(payload.calculation.measures).toHaveLength(5);
+    expect(payload.calculation.measures.find((measure: { measureId: string }) => measure.measureId === "M5"))
+      .toMatchObject({ cost: 25, lagQuarters: 3, realizedFraction: 0.625, realizedEffects: { E2: 8.75, C1: 2.5 } });
+    expect(payload.calculation.districts[0].indicatorDeltas).toEqual(currentScenarioFixture.districts[0].indicatorDeltas);
+    expect(payload.calculation.synergies).toEqual(currentScenarioFixture.synergies);
+    expect(payload.replacement.calculation.finalScore).toBe(replacementCandidateFixture.result.finalScore);
+    expect(payload.replacement.scoreGain).toBe(replacementCandidateFixture.scoreGain);
+    expect(payload).not.toHaveProperty("prompt");
+  });
+
+  it("does not call the provider without an API key", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    expect((await analyzeScenario(currentScenarioFixture)).source).toBe("fallback");
+    expect(parse).not.toHaveBeenCalled();
+  });
+});

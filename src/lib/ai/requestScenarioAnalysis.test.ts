@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { currentScenarioFixture, replacementCandidateFixture } from "@/lib/ai/__fixtures__/scenarioFixtures";
-import { requestScenarioAnalysis } from "@/lib/ai/requestScenarioAnalysis";
+import { ANALYSIS_REQUEST_TIMEOUT_MS, requestScenarioAnalysis } from "@/lib/ai/requestScenarioAnalysis";
 import { evaluateScenario, SECOND_EXAMPLE_DECISIONS, findBestReplacement } from "@/domain";
 
 const validAnalysis = {
@@ -128,5 +128,37 @@ describe("requestScenarioAnalysis", () => {
     await expect(requestScenarioAnalysis(currentScenarioFixture, undefined, {
       fetcher, signal: controller.signal,
     })).rejects.toThrow();
+  });
+});
+
+
+describe("analysis request deadline", () => {
+  it("aborts a stalled network request and returns fallback within its deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        options.signal!.addEventListener("abort", () => reject(options.signal!.reason), { once: true });
+      }));
+      const pending = requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher: fetcher as typeof fetch });
+      await vi.advanceTimersByTimeAsync(ANALYSIS_REQUEST_TIMEOUT_MS);
+      const outcome = await pending;
+      expect(outcome.analysis.source).toBe("fallback");
+      expect(outcome.errorKind).toBe("unavailable");
+      expect(fetcher.mock.calls[0][1].signal!.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not return a stale validation error after cancellation while reading its body", async () => {
+    const controller = new AbortController();
+    const response = new Response("{}", { status: 400 });
+    vi.spyOn(response, "json").mockImplementation(async () => {
+      controller.abort();
+      return { error: "Old plan" };
+    });
+    const fetcher = vi.fn().mockResolvedValue(response);
+    await expect(requestScenarioAnalysis(currentScenarioFixture, undefined, { fetcher, signal: controller.signal })).rejects.toThrow();
   });
 });

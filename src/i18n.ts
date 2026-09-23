@@ -1,5 +1,5 @@
 import { INDICATORS } from "@/domain";
-import type { ReplacementCandidate, ScenarioAnalysis, ValidScenarioResult, ValidationResult } from "@/types/simulation";
+import type { Decision, ReplacementCandidate, ScenarioAnalysis, ValidScenarioResult, ValidationResult } from "@/types/simulation";
 
 export type Language = "ru" | "kk" | "en";
 
@@ -84,13 +84,12 @@ const metricLabels: Record<Language, Record<string, string>> = {
 };
 export const metricLabel = (language: Language, id: string) => metricLabels[language][id] || id;
 
-export function localizedValidation(language: Language, validation: ValidationResult) {
-  const error = validation.errorDetails[0];
-  if (!error) return t(language, "valid");
+export function localizedValidation(language: Language, validation: ValidationResult, decisions: readonly Decision[] = []) {
+  return validation.errorDetails.map((error) => {
   if (language === "ru") return error.code === "INCOMPATIBLE_MEASURES"
     ? `${error.measureIds?.join(" / ")}: ${error.message}`
     : error.message;
-  const id = error.measureIds?.join(", ") ?? "";
+  const id = error.measureIds?.join(", ") ?? (error.decisionIndex === undefined ? "" : decisions[error.decisionIndex]?.measureId ?? "");
   switch (error.code) {
     case "DECISION_COUNT":
       return (validation.decisionCount ?? 0) < 5
@@ -101,26 +100,33 @@ export function localizedValidation(language: Language, validation: ValidationRe
     case "DISTRICT_REQUIRED":
     case "UNKNOWN_DISTRICT": return t(language, "selectDistrict", { id });
     case "DISTRICT_NOT_ALLOWED": return t(language, "noDistrict", { id });
-    case "BUDGET_EXCEEDED": return t(language, "overBudget", { count: Math.abs(validation.remainingBudget ?? 0) });
+    case "BUDGET_EXCEEDED": return t(language, "overBudget", { count: (error.knownCost ?? validation.totalCost ?? 100) - (error.limit ?? 100) });
     case "CATEGORY_LIMIT": return t(language, "directionLimit", { name: directionName(language, error.category ?? "") });
     case "INCOMPATIBLE_MEASURES": return t(language, "conflict", { first: error.measureIds?.[0] ?? "", second: error.measureIds?.[1] ?? "" });
     default: return error.message;
   }
+  });
 }
 
 // Translates already calculated facts only; all values come from the shared engine.
 export function localAnalysis(language: Language, result: ValidScenarioResult, candidate?: ReplacementCandidate): ScenarioAnalysis {
   const strongest = [...result.districts].sort((a, b) => b.scoreDelta - a.scoreDelta)[0];
   const weakest = result.weakestDistrictIds.map((id) => districtName(language, id)).join(", ");
+  const declines = result.districts.flatMap((district) => INDICATORS
+    .filter(({ id }) => district.indicatorDeltas[id] < 0)
+    .map(({ id }) => ({ district, id, delta: district.indicatorDeltas[id] })))
+    .sort((a, b) => a.delta - b.delta);
+  const critical = result.criticalIndicatorsAfter.slice(0, 3).map((item) =>
+    `${districtName(language, item.districtId)} · ${item.indicatorId}: ${formatScore(language, item.value)}`);
   const recommendation = candidate
     ? `${t(language, "remove")} ${candidate.removed.decision.measureId} → ${t(language, "add")} ${candidate.added.decision.measureId}: Score ${formatScore(language, candidate.result.finalScore)} (${formatDelta(language, candidate.scoreGain)}).${candidate.scoreGain <= 0 ? ` ${t(language, "noReplacement")}` : ""}`
     : t(language, "recommendationText", { count: result.activatedSynergies.length });
   return {
     source: "fallback",
     summary: `Score: ${formatScore(language, result.baselineScore)} → ${formatScore(language, result.finalScore)} (${formatDelta(language, result.scoreDelta)}).`,
-    strengths: strongest ? [`${districtName(language, strongest.districtId)}: ${formatScore(language, strongest.scoreBefore)} → ${formatScore(language, strongest.scoreAfter)} (${formatDelta(language, strongest.scoreDelta)}).`] : [],
-    risks: [t(language, "riskText", { district: weakest, value: formatScore(language, result.weakestDistrictScoreAfter), critical: result.criticalAfter })],
-    tradeoffs: [`${t(language, "budget")}: ${result.totalCost} / 100. ${t(language, "remaining")}: ${result.remainingBudget}.`],
+    strengths: strongest && strongest.scoreDelta > 0 ? [`${districtName(language, strongest.districtId)}: ${formatScore(language, strongest.scoreBefore)} → ${formatScore(language, strongest.scoreAfter)} (${formatDelta(language, strongest.scoreDelta)}).`] : [],
+    risks: [t(language, "riskText", { district: weakest, value: formatScore(language, result.weakestDistrictScoreAfter), critical: result.criticalAfter }), ...(critical.length ? [`${t(language, "critical")}: ${critical.join("; ")}.`] : [])],
+    tradeoffs: [`${t(language, "budget")}: ${result.totalCost} / 100. ${t(language, "remaining")}: ${result.remainingBudget}.`, ...declines.slice(0, 3).map(({ district, id, delta }) => `${districtName(language, district.districtId)} · ${metricLabel(language, id)}: ${formatScore(language, district.indicatorsBefore[id])} → ${formatScore(language, district.indicatorsAfter[id])} (${formatDelta(language, delta)}).`)],
     recommendations: [recommendation],
   };
 }
