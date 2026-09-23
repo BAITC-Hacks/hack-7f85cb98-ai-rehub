@@ -26,7 +26,7 @@ export async function analyzeScenario(
   if (!scenario.valid || !process.env.OPENAI_API_KEY) return fallback();
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 8000, maxRetries: 0 });
+    const client = new OpenAI({ timeout: 8000, maxRetries: 0 });
     const response = await client.responses.parse({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       store: false,
