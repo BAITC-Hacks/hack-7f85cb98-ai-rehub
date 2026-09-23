@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.engine.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "sourceMap": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist/engine"
+  },
+  "include": ["src/data/**/*.ts", "src/domain/**/*.ts", "src/types/simulation.ts"],
+  "exclude": ["tests", "scripts"]
+}
