@@ -10,7 +10,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Откройте `http://localhost:3000`. В `.env.local` можно указать `OPENAI_API_KEY` и `OPENAI_MODEL`. Ключ хранится только на сервере. Без ключа `/api/analyze` работает через локальный fallback. Ключ ChatGPT Pro не заменяет ключ OpenAI API: это отдельный сервис с собственной оплатой.
+В `.env.local` можно указать `OPENAI_API_KEY` и `OPENAI_MODEL`. Ключ хранится только на сервере. Без ключа `/api/analyze` работает через локальный fallback. Ключ ChatGPT Pro не заменяет ключ OpenAI API: это отдельный сервис с собственной оплатой. Главная страница в этой ветке пока остаётся шаблоном Next.js; работающий сценарий проверяется через API и тесты ниже.
 
 На Windows вместо `cp` используйте `Copy-Item .env.example .env.local`.
 
@@ -35,14 +35,28 @@ const analysis: ScenarioAnalysis = await response.json();
 
 Для сравнения можно добавить `replacementDecisions` — полный второй набор из пяти решений, отличающийся ровно одним выбором и улучшающий Score. Сервер пересчитывает оба набора и сам определяет прирост. Успешный ответ имеет поля `source`, `summary`, `strengths`, `risks`, `tradeoffs`, `recommendations`. `source` показывает `openai` или `fallback`. Неверный JSON, невалидный набор, несовместимость мер и ошибочная замена возвращают HTTP 400; при ошибке выбора ответ содержит `validation.errors` и бюджет.
 
-Для клиентского экрана используйте `useScenarioAnalysis` из `src/lib/ai/useScenarioAnalysis.ts`:
+Для подключения командного интерфейса используйте `useScenarioAnalysis` из `src/lib/ai/useScenarioAnalysis.ts` внутри клиентского компонента:
 
 ```tsx
 const { analysis, loading, error, retry } = useScenarioAnalysis(scenario, candidate);
-<AIAnalysis analysis={analysis} loading={loading} />
+// Отобразите analysis.summary, strengths, risks, tradeoffs и recommendations.
 ```
 
 Передавайте в хук рассчитанный `scenario`, а после поиска замены — также `candidate`. Хук извлекает идентификаторы решений из результата и отправляет их на серверный пересчёт. Он отменяет устаревшие запросы при смене сценария. `error` содержит короткое пользовательское сообщение, а `retry()` повторяет запрос. Даже при сетевой ошибке `analysis` содержит локальный fallback; при обычном серверном fallback ошибки нет. Пока результат не рассчитан, передайте `null` вместо `scenario`.
+
+Для проверки API без интерфейса после `npm run dev` выполните в PowerShell:
+
+```powershell
+$decisions = @(
+  @{ measureId = 'M7'; districtId = 'nura' },
+  @{ measureId = 'M8'; districtId = 'nura' },
+  @{ measureId = 'M10'; districtId = 'nura' },
+  @{ measureId = 'M12' },
+  @{ measureId = 'M5'; districtId = 'saryarka' }
+)
+$body = @{ decisions = $decisions } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri 'http://localhost:3000/api/analyze' -Method Post -ContentType 'application/json' -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
 
 Маршрут: `src/app/api/analyze/route.ts`. Серверный OpenAI-анализ: `src/lib/ai/analyze.ts`. Детерминированное объяснение: `src/lib/ai/fallbackAnalysis.ts`. Тестовые сценарии в `src/lib/ai/__fixtures__/scenarioFixtures.ts` строятся вызовами реального движка, без вручную записанного Score.
 
