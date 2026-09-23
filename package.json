@@ -3,13 +3,22 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22.18.0"},
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "test": "node scripts/test-engine.mjs",
     "test:engine": "node scripts/test-engine.mjs",
-    "test:legacy": "node --test engine/test/*.test.mjs",
+    "test:legacy": "node --test tests/reference/engine/test/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.engine.json",
-    "typecheck:engine": "tsc --noEmit -p tsconfig.engine.json"
+    "typecheck:engine": "tsc --noEmit -p tsconfig.engine.json",
+    "benchmark:engine": "node --experimental-strip-types scripts/benchmark-engine.ts",
+    "build:engine": "tsc -p tsconfig.engine.build.json",
+    "smoke:engine": "node scripts/smoke-built.mjs",
+    "smoke:browser:prepare": "node scripts/write-browser-smoke.mjs"
   },
-  "devDependencies": {"typescript": "5.9.3", "@types/node": "22.20.4"}
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "22.20.4"
+  }
 }

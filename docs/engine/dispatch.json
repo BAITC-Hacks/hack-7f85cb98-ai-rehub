@@ -12,11 +12,14 @@
   },
   "runtime": "Pure TypeScript ESM; canonical implementation in src/domain; Node >=22.18 for built-in TS test runner",
   "commands": {
-    "install": "npm install",
+    "install": "npm ci --ignore-scripts",
     "typecheck": "npm run typecheck:engine",
     "tests": "npm run test:engine",
     "oneRole": "node scripts/test-engine.mjs tests/engine/ROLE.test.ts",
-    "reference": "npm run test:legacy"
+    "reference": "npm run test:legacy",
+    "build": "npm run build:engine",
+    "smoke": "npm run smoke:engine",
+    "benchmark": "npm run benchmark:engine"
   },
   "mainOwned": [
     "src/types/simulation.ts",
@@ -30,7 +33,8 @@
     "docs/engine/parallel-contract.md",
     "docs/engine/dispatch.json",
     "docs/engine/integration-report.md",
-    "docs/engine/handoff.md"
+    "docs/engine/handoff.md",
+    "tsconfig.engine.build.json"
   ],
   "roles": {
     "data": {
@@ -79,8 +83,9 @@
     "evaluation",
     "advisor"
   ],
-  "status": "contract-only; TS implementations are assigned to workers, no success stubs",
+  "status": "All four role implementations integrated; final acceptance and handoff owned by main.",
   "baselineExpected": 52.55768,
   "exampleExpected": 56.54307,
-  "secondExampleExpected": 57.236735
+  "secondExampleExpected": 57.236735,
+  "baseSha": "2c6a2e745f8fb512f901ed4f3a4440fcea255bc9"
 }
