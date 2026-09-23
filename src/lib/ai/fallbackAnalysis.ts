@@ -101,9 +101,12 @@ export function createFallbackAnalysis(
   }
 
   if (mostImprovedDistrict && mostImprovedDistrict.scoreDelta > 0) {
-    strengths.push(
-      `Наибольший прирост получил район ${mostImprovedDistrict.name}: +${formatNumber(mostImprovedDistrict.scoreDelta)}.`,
-    );
+    const leaders = scenario.districts.filter((district) =>
+      district.scoreDelta === mostImprovedDistrict.scoreDelta);
+    strengths.push(leaders.length === 1
+      ? `Наибольший прирост получил район ${mostImprovedDistrict.name}: +${formatNumber(mostImprovedDistrict.scoreDelta)}.`
+      : `Одинаковый наибольший прирост получили районы ${leaders.map((district) => district.name).join(", ")}: +${formatNumber(mostImprovedDistrict.scoreDelta)}.`);
+
   }
 
   if (scenario.activatedSynergies.length > 0) {
@@ -113,9 +116,12 @@ export function createFallbackAnalysis(
   }
 
   if (weakestDistrict) {
-    risks.push(
-      `Самым слабым остаётся район ${weakestDistrict.name} со Score ${formatNumber(weakestDistrict.scoreAfter)}.`,
-    );
+    const weakest = scenario.districts.filter((district) =>
+      district.scoreAfter === weakestDistrict.scoreAfter);
+    risks.push(weakest.length === 1
+      ? `Минимальный районный Score получил район ${weakestDistrict.name}: ${formatNumber(weakestDistrict.scoreAfter)}.`
+      : `Минимальный районный Score одинаков у районов ${weakest.map((district) => district.name).join(", ")}: ${formatNumber(weakestDistrict.scoreAfter)}.`);
+
   }
 
   if (criticalIndicators.length > 0) {

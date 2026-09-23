@@ -9,6 +9,8 @@ export type AnalysisOutcome = {
   error: string | null;
   errorKind: "validation" | "unavailable" | null;
 };
+export const ANALYSIS_REQUEST_TIMEOUT_MS = 25_000;
+
 type Options = { signal?: AbortSignal; fetcher?: typeof fetch };
 
 export async function requestScenarioAnalysis(
@@ -53,16 +55,22 @@ export async function requestScenarioAnalysis(
     }
   }
 
+  const deadline = new AbortController();
+  const timeout = setTimeout(() => deadline.abort(new DOMException("Analysis timed out", "TimeoutError")),
+    ANALYSIS_REQUEST_TIMEOUT_MS);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, deadline.signal]) : deadline.signal;
   try {
     const response = await (options.fetcher ?? fetch)("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decisions, replacementDecisions }),
-      signal: options.signal,
+      signal,
     });
-    options.signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (response.status === 400) {
       const body = await response.json();
+      signal.throwIfAborted();
       return {
         analysis: createFallbackAnalysis(localScenario),
         error: typeof body.error === "string" ? body.error : "Проверьте выбранные решения.",
@@ -71,7 +79,7 @@ export async function requestScenarioAnalysis(
     }
     if (!response.ok) throw new Error("analysis request failed");
     const parsed = analysisResponseSchema.safeParse(await response.json());
-    options.signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (!parsed.success) throw new Error("invalid analysis response");
     return { analysis: parsed.data, error: null, errorKind: null };
   } catch (error) {
@@ -81,5 +89,7 @@ export async function requestScenarioAnalysis(
       error: "Расширенный анализ недоступен. Показан локальный разбор результатов.",
       errorKind: "unavailable",
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
